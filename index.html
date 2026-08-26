@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Fly Masters - AI-Powered Study Abroad &amp; University Selection</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#4F46E5" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="FlyMasters" />
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Fly Masters - study abroad consultant. AI-powered university matching, visa assistance, scholarships, and application support. 50,000+ students placed in top universities worldwide.">
+    <meta name="author" content="Fly Masters" />
+    <meta name="keywords" content="study abroad, university admission, visa assistance, scholarships, education consultant, AI university matching, international education, study overseas, masters abroad, FlyMasters">
+
+    <!-- Open Graph Meta Tags -->
+    
+    
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://b485f415-001e-4005-81b9-273bffe4427a.lovableproject.com" />
+    <meta property="og:image" content="/icon-512.png" />
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@flymasters" />
+    
+    
+    <meta name="twitter:image" content="/icon-512.png" />
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <meta property="og:title" content="Fly Masters - AI-Powered Study Abroad &amp; University Selection">
+  <meta name="twitter:title" content="Fly Masters - AI-Powered Study Abroad &amp; University Selection">
+  <meta property="og:description" content="Fly Masters - study abroad consultant. AI-powered university matching, visa assistance, scholarships, and application support. 50,000+ students placed in top universities worldwide.">
+  <meta name="twitter:description" content="Fly Masters - study abroad consultant. AI-powered university matching, visa assistance, scholarships, and application support. 50,000+ students placed in top universities worldwide.">
+</head>
+
+  <body>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) { registration.unregister(); });
+        });
+        if (window.caches) {
+          caches.keys().then(function (keys) {
+            keys.forEach(function (key) { caches.delete(key); });
+          });
+        }
+      }
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
