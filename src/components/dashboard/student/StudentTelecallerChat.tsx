@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,20 +7,19 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { 
-  MessageCircle, 
-  Send, 
-  User, 
+import {
+  Phone,
+  Send,
+  User,
   Clock,
   CheckCircle2,
   Circle,
-  Bot,
   RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
-interface PrivateMessage {
+interface TelecallerMessage {
   id: string;
   message: string;
   sender_id: string;
@@ -33,16 +31,15 @@ interface PrivateMessage {
 interface Conversation {
   id: string;
   student_id: string;
-  counselor_id: string;
+  telecaller_id: string;
   last_message_at: string | null;
 }
 
-export function StudentPrivateChat() {
+export function StudentTelecallerChat() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<PrivateMessage[]>([]);
-  const [counselorName, setCounselorName] = useState('Your Counselor');
+  const [messages, setMessages] = useState<TelecallerMessage[]>([]);
+  const [telecallerName, setTelecallerName] = useState('Your Telecaller');
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
@@ -51,9 +48,7 @@ export function StudentPrivateChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (user) {
-      openChat();
-    }
+    if (user) openChat();
   }, [user]);
 
   useEffect(() => {
@@ -62,115 +57,84 @@ export function StudentPrivateChat() {
 
   useEffect(() => {
     if (!conversation?.id) return;
-
-    const channel = supabase
-      .channel(`student-chat-${conversation.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'private_messages',
-          filter: `conversation_id=eq.${conversation.id}`,
-        },
-        (payload) => {
-          const incoming = payload?.new as PrivateMessage | undefined;
-          if (!incoming?.id) return;
-          setMessages((prev) => {
-            if (prev.some((msg) => msg.id === incoming.id)) return prev;
-            return [...prev, incoming];
-          });
-        }
-      )
-      .subscribe();
-
     const poll = window.setInterval(() => {
       void fetchMessages(conversation.id);
     }, 3000);
-
-    return () => {
-      window.clearInterval(poll);
-      supabase.removeChannel(channel);
-    };
+    return () => window.clearInterval(poll);
   }, [conversation?.id]);
 
-  const findAssignedCounselorId = async (): Promise<string | null> => {
+  const findAssignedTelecallerId = async (): Promise<string | null> => {
     if (!user) return null;
 
     const { data: leadByUser } = await supabase
       .from('student_leads')
-      .select('assigned_counselor_id')
+      .select('assigned_telecaller_id')
       .eq('user_id', user.id)
-      .not('assigned_counselor_id', 'is', null)
+      .not('assigned_telecaller_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (leadByUser?.assigned_counselor_id) {
-      return leadByUser.assigned_counselor_id;
+    if (leadByUser?.assigned_telecaller_id) {
+      return leadByUser.assigned_telecaller_id;
     }
 
     if (user.email) {
       const { data: leadByEmail } = await supabase
         .from('student_leads')
-        .select('assigned_counselor_id')
+        .select('assigned_telecaller_id')
         .eq('email', user.email)
-        .not('assigned_counselor_id', 'is', null)
+        .not('assigned_telecaller_id', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (leadByEmail?.assigned_counselor_id) {
-        return leadByEmail.assigned_counselor_id;
+      if (leadByEmail?.assigned_telecaller_id) {
+        return leadByEmail.assigned_telecaller_id;
       }
     }
 
     return null;
   };
 
-  const rememberAssignment = async (counselorId: string) => {
-    void counselorId;
-    return;
-  };
-
-  const loadCounselorName = async (counselorId: string) => {
+  const loadTelecallerName = async (telecallerId: string) => {
     const { data: profile } = await supabase
       .from('profiles')
       .select('first_name, last_name')
-      .eq('user_id', counselorId)
+      .eq('user_id', telecallerId)
       .maybeSingle();
 
     const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ');
-    setCounselorName(name || 'Fly Masters Counselor');
+    setTelecallerName(name || 'Fly Masters Telecaller');
   };
 
-  const ensureConversation = async (counselorId: string) => {
+  const ensureConversation = async (telecallerId: string) => {
     if (!user) return null;
 
     const { data: existing } = await supabase
-      .from('private_conversations')
+      .from('telecaller_conversations')
       .select('*')
       .eq('student_id', user.id)
-      .eq('counselor_id', counselorId)
+      .eq('telecaller_id', telecallerId)
       .maybeSingle();
 
     if (existing) return existing as Conversation;
 
     const { data: created, error } = await supabase
-      .from('private_conversations')
+      .from('telecaller_conversations')
       .insert({
         student_id: user.id,
-        counselor_id: counselorId,
+        telecaller_id: telecallerId,
       })
       .select('*')
       .single();
 
     if (error) {
       const { data: retry } = await supabase
-        .from('private_conversations')
+        .from('telecaller_conversations')
         .select('*')
         .eq('student_id', user.id)
-        .eq('counselor_id', counselorId)
+        .eq('telecaller_id', telecallerId)
         .maybeSingle();
       if (retry) return retry as Conversation;
       throw error;
@@ -181,7 +145,7 @@ export function StudentPrivateChat() {
 
   const fetchMessages = async (conversationId: string) => {
     const { data, error } = await supabase
-      .from('private_messages')
+      .from('telecaller_messages')
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
@@ -197,15 +161,14 @@ export function StudentPrivateChat() {
       setLoading(true);
       setStatusMessage('');
 
-      const counselorId = await findAssignedCounselorId();
-      if (!counselorId) {
+      const telecallerId = await findAssignedTelecallerId();
+      if (!telecallerId) {
         setConversation(null);
-        setStatusMessage('No counselors are available in the system yet.');
+        setStatusMessage('No telecaller has been assigned to you yet.');
         return;
       }
 
-      await rememberAssignment(counselorId);
-      const chat = await ensureConversation(counselorId);
+      const chat = await ensureConversation(telecallerId);
       if (!chat) {
         setConversation(null);
         setStatusMessage('Could not start a conversation. Please try again.');
@@ -215,12 +178,12 @@ export function StudentPrivateChat() {
       setConversation(chat);
       await Promise.all([
         fetchMessages(chat.id),
-        loadCounselorName(counselorId),
+        loadTelecallerName(telecallerId),
       ]);
     } catch (error) {
-      console.error('Error opening counselor chat:', error);
+      console.error('Error opening telecaller chat:', error);
       setConversation(null);
-      setStatusMessage('Could not connect to a counselor. Please try again.');
+      setStatusMessage('Could not connect to your telecaller. Please try again.');
       toast.error('Failed to load chat');
     } finally {
       setLoading(false);
@@ -237,11 +200,11 @@ export function StudentPrivateChat() {
     if (!conversation || !newMessage.trim() || sending || !user) return;
 
     const text = newMessage.trim();
-    const optimistic: PrivateMessage = {
+    const optimistic: TelecallerMessage = {
       id: crypto.randomUUID(),
       message: text,
       sender_id: user.id,
-      receiver_id: conversation.counselor_id,
+      receiver_id: conversation.telecaller_id,
       is_read: false,
       created_at: new Date().toISOString(),
     };
@@ -252,12 +215,12 @@ export function StudentPrivateChat() {
       setNewMessage('');
 
       const { error } = await supabase
-        .from('private_messages')
+        .from('telecaller_messages')
         .insert({
           id: optimistic.id,
           conversation_id: conversation.id,
           sender_id: user.id,
-          receiver_id: conversation.counselor_id,
+          receiver_id: conversation.telecaller_id,
           message: text,
           is_read: false,
           created_at: optimistic.created_at,
@@ -267,9 +230,17 @@ export function StudentPrivateChat() {
 
       try {
         await supabase
-          .from('private_conversations')
+          .from('telecaller_conversations')
           .update({ last_message_at: new Date().toISOString() })
           .eq('id', conversation.id);
+        await supabase.from('notifications').insert({
+          user_id: conversation.telecaller_id,
+          title: 'New message from your lead',
+          message: text.slice(0, 140),
+          type: 'info',
+          action_url: '/chat',
+          is_read: false,
+        });
         await fetchMessages(conversation.id);
       } catch (refreshError) {
         console.error('Message sent, but refresh failed:', refreshError);
@@ -304,29 +275,25 @@ export function StudentPrivateChat() {
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center">
-            <MessageCircle className="w-5 h-5 text-white" />
+            <Phone className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Counselor Chat</h1>
-            <p className="text-muted-foreground">Chat with a Fly Masters counselor</p>
+            <h1 className="text-2xl font-bold">Telecaller Chat</h1>
+            <p className="text-muted-foreground">Message the telecaller working on your application</p>
           </div>
         </div>
-        
+
         <Card className="glass-card">
           <CardContent className="text-center py-12 space-y-4">
-            <MessageCircle className="w-16 h-16 mx-auto opacity-50" />
-            <h3 className="text-lg font-semibold">Connect with a counselor</h3>
+            <Phone className="w-16 h-16 mx-auto opacity-50" />
+            <h3 className="text-lg font-semibold">Connect with your telecaller</h3>
             <p className="text-muted-foreground max-w-md mx-auto">
-              {statusMessage || 'We will assign an available counselor so you can start chatting.'}
+              {statusMessage || 'We will look up your assigned telecaller so you can start chatting.'}
             </p>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <Button onClick={connectNow} disabled={connecting}>
                 <RefreshCw className={`w-4 h-4 mr-2 ${connecting ? 'animate-spin' : ''}`} />
                 {connecting ? 'Connecting...' : 'Connect now'}
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/chat')}>
-                <Bot className="w-4 h-4 mr-2" />
-                Talk to AI Advisor
               </Button>
             </div>
           </CardContent>
@@ -339,11 +306,11 @@ export function StudentPrivateChat() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center">
-          <MessageCircle className="w-5 h-5 text-white" />
+          <Phone className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Counselor Chat</h1>
-          <p className="text-muted-foreground">Chatting with {counselorName}</p>
+          <h1 className="text-2xl font-bold">Telecaller Chat</h1>
+          <p className="text-muted-foreground">Chatting with {telecallerName}</p>
         </div>
       </div>
 
@@ -356,8 +323,8 @@ export function StudentPrivateChat() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-base">{counselorName}</CardTitle>
-              <CardDescription className="text-xs">Your Study Abroad Counselor</CardDescription>
+              <CardTitle className="text-base">{telecallerName}</CardTitle>
+              <CardDescription className="text-xs">Your Fly Masters Telecaller</CardDescription>
             </div>
             <Badge variant="outline" className="ml-auto">
               <Circle className="w-2 h-2 mr-1 fill-green-500 text-green-500" />
@@ -365,15 +332,15 @@ export function StudentPrivateChat() {
             </Badge>
           </div>
         </CardHeader>
-        
+
         <Separator />
-        
+
         <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <MessageCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <Phone className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <p>No messages yet</p>
-              <p className="text-sm">Say hello and your counselor will reply here.</p>
+              <p className="text-sm">Say hello and your telecaller will reply here.</p>
             </div>
           ) : (
             messages.map((message) => (
@@ -417,9 +384,9 @@ export function StudentPrivateChat() {
           )}
           <div ref={messagesEndRef} />
         </CardContent>
-        
+
         <Separator />
-        
+
         <div className="p-4">
           <div className="flex gap-2">
             <Input
@@ -430,8 +397,8 @@ export function StudentPrivateChat() {
               disabled={sending}
               className="flex-1"
             />
-            <Button 
-              onClick={sendMessage} 
+            <Button
+              onClick={sendMessage}
               disabled={!newMessage.trim() || sending}
               size="sm"
             >

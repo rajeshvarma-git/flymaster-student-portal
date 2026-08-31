@@ -218,7 +218,6 @@ export function StudentProfileForm() {
         notes: formData.student_notes || null,
         preferences: academicPreferences,
         lead_source: 'student_profile',
-        entity_type: 'student',
         updated_at: new Date().toISOString(),
       };
 

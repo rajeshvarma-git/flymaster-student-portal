@@ -11,6 +11,7 @@ import { StudentUniversities } from './StudentUniversities';
 import { StudentDocuments } from './StudentDocuments';
 import { StudentApplications } from './StudentApplications';
 import { StudentPrivateChat } from './StudentPrivateChat';
+import { StudentTelecallerChat } from './StudentTelecallerChat';
 import { StudentNotifications } from './StudentNotifications';
 
 export function StudentLayout() {
@@ -85,6 +86,11 @@ export function StudentLayout() {
           <Route path="chat" element={
             <div className="p-4 md:p-6">
               <StudentPrivateChat />
+            </div>
+          } />
+          <Route path="telecaller-chat" element={
+            <div className="p-4 md:p-6">
+              <StudentTelecallerChat />
             </div>
           } />
           <Route path="notifications" element={

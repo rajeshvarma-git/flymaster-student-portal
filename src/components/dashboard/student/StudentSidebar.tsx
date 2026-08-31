@@ -4,6 +4,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   User,
   MessageCircle,
+  Phone,
   GraduationCap,
   Bell,
   BookOpen,
@@ -66,6 +67,11 @@ const studentNavItems: StudentNavItem[] = [
     title: 'Counselor Chat',
     url: '/student/chat',
     icon: MessageCircle
+  },
+  {
+    title: 'Telecaller Chat',
+    url: '/student/telecaller-chat',
+    icon: Phone
   },
   {
     title: 'Notifications',

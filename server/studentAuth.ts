@@ -198,10 +198,17 @@ export async function signUpUser(input: {
       email,
       first_name: firstName,
       last_name: lastName,
-      assigned_counselor_id: "local-counselor-1",
+      // A signup is a HOT LEAD, not a student. The person found us and registered
+      // themselves, which is the strongest intent we get — so they go to the top of the
+      // telecaller queue. They only become a student when a telecaller converts them,
+      // and only an admin attaches a counselor after that.
+      assigned_counselor_id: null,
+      assigned_telecaller_id: null,
       lead_source: "student_site",
-      entity_type: "student",
-      status: "assigned",
+      entity_type: "lead",
+      lead_status: "hot",
+      lead_stage: "hot",
+      status: "new",
       created_at: now,
       updated_at: now,
     }],
