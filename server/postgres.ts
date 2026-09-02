@@ -114,40 +114,25 @@ async function ensureSchemaOnce() {
       );
     }
 
-    const identityDocs = [
-      {
-        id: "dc-passport-proof",
-        document_type: "Passport proof",
-        description: "Clear color scan of your passport bio page. This is not a passport-size photo.",
-        is_required: true,
-        is_active: true,
-        max_file_size_mb: 20,
-        allowed_file_types: ["pdf", "jpg", "jpeg", "png"],
-        country: "All",
-        countries: ["All"],
-        degree_type: "All",
-        degree_types: ["All"],
-        display_order: 11,
-      },
-      {
-        id: "dc-aadhaar-proof",
-        document_type: "Aadhaar card proof",
-        description: "Clear scan or photo of your Aadhaar / Adhar card (front and back).",
-        is_required: true,
-        is_active: true,
-        max_file_size_mb: 20,
-        allowed_file_types: ["pdf", "jpg", "jpeg", "png"],
-        country: "All",
-        countries: ["All"],
-        degree_type: "All",
-        degree_types: ["All"],
-        display_order: 12,
-      },
-    ];
-    for (const item of identityDocs) {
+    const seedDefaults = seedAppState().tables;
+    for (const item of seedDefaults.document_checklists || []) {
       await client.query(
         "INSERT INTO app_records (id, table_name, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()",
         [item.id, "document_checklists", JSON.stringify(item)]
+      );
+    }
+
+    for (const item of seedDefaults.document_countries || []) {
+      await client.query(
+        "INSERT INTO app_records (id, table_name, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()",
+        [item.id, "document_countries", JSON.stringify(item)]
+      );
+    }
+
+    for (const item of seedDefaults.document_degree_types || []) {
+      await client.query(
+        "INSERT INTO app_records (id, table_name, data) VALUES ($1, $2, $3::jsonb) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()",
+        [item.id, "document_degree_types", JSON.stringify(item)]
       );
     }
 

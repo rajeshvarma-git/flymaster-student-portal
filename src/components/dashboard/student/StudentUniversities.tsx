@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,7 +14,7 @@ import {
   Heart,
   ExternalLink
 } from 'lucide-react';
-import { getFallbackUniversities, matchesAnyCountry, normalizeCountry } from '@/lib/universityRecommendations';
+import { matchesAnyCountry, normalizeCountry } from '@/lib/universityRecommendations';
 
 interface University {
   id: string;
@@ -26,7 +26,6 @@ interface University {
   is_active: boolean;
   university_type: string | null;
   description: string | null;
-  isFallback?: boolean;
 }
 
 export function StudentUniversities() {
@@ -47,20 +46,23 @@ export function StudentUniversities() {
   const fetchPageData = async () => {
     try {
       setLoading(true);
-      const [{ data: catalog }, leadResult] = await Promise.all([
+      const [{ data: catalog }, leadResult, profileResult] = await Promise.all([
         supabase.from('universities').select('*').eq('is_active', true).order('ranking', { ascending: true }),
         user
           ? supabase.from('student_leads').select('preferred_countries, preferences').eq('user_id', user.id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        user
+          ? supabase.from('profiles').select('interested_countries').eq('user_id', user.id).maybeSingle()
           : Promise.resolve({ data: null }),
       ]);
 
       const lead = leadResult.data;
       const extras = ((lead?.preferences as Record<string, any> | null) || {});
-      const fromLead = (lead?.preferred_countries || extras.interested_countries || []) as string[];
+      const fromLead = (lead?.preferred_countries || extras.interested_countries || profileResult.data?.interested_countries || []) as string[];
       const destinations = Array.from(new Set(fromLead.map((item) => normalizeCountry(item)).filter(Boolean)));
 
       setPreferredCountries(destinations);
-      setUniversities(catalog.data || []);
+      setUniversities(catalog || []);
       setSelectedCountry(destinations.length > 0 ? 'profile' : '');
     } catch (error) {
       console.error('Error fetching universities:', error);
@@ -131,16 +133,7 @@ export function StudentUniversities() {
     }
   };
 
-  const catalogPlusFallbacks = useMemo(() => {
-    const fallbacks = getFallbackUniversities(preferredCountries);
-    const names = new Set(universities.map((uni) => uni.name.toLowerCase()));
-    return [
-      ...universities,
-      ...fallbacks.filter((uni) => !names.has(uni.name.toLowerCase())),
-    ];
-  }, [universities, preferredCountries]);
-
-  const filteredUniversities = catalogPlusFallbacks.filter((uni) => {
+  const filteredUniversities = universities.filter((uni) => {
     const matchesSearch = !searchTerm ||
       uni.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       uni.country.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -158,7 +151,7 @@ export function StudentUniversities() {
     return aMatch - bMatch;
   });
 
-  const countries = Array.from(new Set(catalogPlusFallbacks.map((uni) => uni.country))).sort();
+  const countries = Array.from(new Set(universities.map((uni) => uni.country))).sort();
 
   if (loading) {
     return (
@@ -225,8 +218,8 @@ export function StudentUniversities() {
             <p className="text-muted-foreground">
               {preferredCountries.length === 0
                 ? 'Add interested countries on My Profile to see matching universities.'
-                : universities.length === 0 && filteredUniversities.length === 0
-                ? 'Your counselor will add universities to the catalog soon.'
+                : universities.length === 0
+                ? 'No universities have been added for your destinations yet. Your counselor will add them from the admin portal.'
                 : 'Try another country filter or update destinations on My Profile.'}
             </p>
             <div className="flex justify-center gap-2 mt-4">
@@ -266,7 +259,7 @@ export function StudentUniversities() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={savingId === university.id || university.isFallback}
+                      disabled={savingId === university.id}
                       onClick={() => toggleFavorite(university.id)}
                       aria-label={isFavorite ? 'Remove from favorites' : 'Save university'}
                     >

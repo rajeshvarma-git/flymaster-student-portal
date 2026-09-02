@@ -7,8 +7,9 @@ RUN npm ci
 
 COPY . .
 
-# VITE_* vars must be set as Railway build-time variables
-ARG VITE_API_URL
+# VITE_* vars are optional at build time. Leave VITE_API_URL unset for Railway
+# so the deployed app talks to the same origin API server.
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build

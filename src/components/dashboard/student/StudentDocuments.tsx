@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { validateDocumentFile } from '@/lib/documentTypeValidation';
 import { notifyCounselorsOfStudentDocument } from '@/lib/notifyCounselorsOfStudentDocument';
+import { normalizeCountry } from '@/lib/universityRecommendations';
+import { filterDocumentChecklistsForProfile, normalizeDegreeLevel } from '@/lib/documentChecklistMatching';
 
 interface Document {
   id: string;
@@ -57,56 +59,6 @@ const withPracticalUploadLimit = <T extends { max_file_size_mb?: number | null }
   max_file_size_mb: Math.max(item.max_file_size_mb || 0, MIN_UPLOAD_SIZE_MB),
 });
 
-const IDENTITY_CHECKLIST: DocumentChecklist[] = [
-  {
-    id: 'dc-passport-proof',
-    document_type: 'Passport proof',
-    description: 'Clear color scan of your passport bio page. This is not a passport-size photo.',
-    is_required: true,
-    max_file_size_mb: 20,
-    allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'],
-  },
-  {
-    id: 'dc-aadhaar-proof',
-    document_type: 'Aadhaar card proof',
-    description: 'Clear scan or photo of your Aadhaar / Adhar card (front and back).',
-    is_required: true,
-    max_file_size_mb: 20,
-    allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'],
-  },
-];
-
-const DEFAULT_CHECKLIST: DocumentChecklist[] = [
-  { id: 'passport', document_type: 'Passport proof', description: 'Clear color scan of your passport bio page', is_required: true, max_file_size_mb: 20, allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'] },
-  { id: 'aadhaar', document_type: 'Aadhaar card proof', description: 'Clear scan or photo of your Aadhaar / Adhar card', is_required: true, max_file_size_mb: 20, allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'] },
-  { id: 'photo', document_type: 'Photo(Passport size)', description: 'Recent passport-size photograph', is_required: true, max_file_size_mb: 20, allowed_file_types: ['jpg', 'jpeg', 'png'] },
-  { id: 'tenth', document_type: '10th Marksheet', description: 'Class 10 / SSC marksheet', is_required: true, max_file_size_mb: 20, allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'] },
-  { id: 'twelfth', document_type: '12th Marksheet', description: 'Class 12 / HSC marksheet', is_required: true, max_file_size_mb: 20, allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'] },
-  { id: 'degree', document_type: 'Degree Transcript', description: 'Bachelor’s or latest degree transcripts', is_required: true, max_file_size_mb: 20, allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'] },
-  { id: 'english', document_type: 'English Test Score', description: 'IELTS, TOEFL, PTE, or Duolingo score report', is_required: false, max_file_size_mb: 20, allowed_file_types: ['pdf', 'jpg', 'jpeg', 'png'] },
-  { id: 'resume', document_type: 'Resume / CV', description: 'Updated resume', is_required: false, max_file_size_mb: 20, allowed_file_types: ['pdf', 'doc', 'docx'] },
-  { id: 'sop', document_type: 'Statement of Purpose', description: 'SOP or motivation letter', is_required: false, max_file_size_mb: 20, allowed_file_types: ['pdf', 'doc', 'docx'] },
-];
-
-const isIdentityDoc = (documentType: string, kind: 'passport' | 'aadhaar') => {
-  const type = documentType.toLowerCase();
-  if (kind === 'passport') {
-    return type.includes('passport proof') || (type.includes('passport') && !type.includes('photo') && !type.includes('size'));
-  }
-  return type.includes('aadhaar') || type.includes('aadhar') || type.includes('adhar');
-};
-
-const withIdentityDocuments = (items: DocumentChecklist[]) => {
-  const next = [...items];
-  for (const extra of IDENTITY_CHECKLIST) {
-    const kind = extra.document_type.toLowerCase().includes('aadhaar') ? 'aadhaar' : 'passport';
-    if (!next.some((item) => isIdentityDoc(item.document_type, kind))) {
-      next.push(extra);
-    }
-  }
-  return next;
-};
-
 export function StudentDocuments() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -116,6 +68,10 @@ export function StudentDocuments() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [profileSummary, setProfileSummary] = useState<{ countries: string[]; degreeLevel: string }>({
+    countries: [],
+    degreeLevel: '',
+  });
 
   useEffect(() => {
     if (user) {
@@ -190,54 +146,65 @@ export function StudentDocuments() {
     if (!user) return;
     
     try {
-      const { data: lead } = await supabase
-        .from('student_leads')
-        .select('preferred_countries, preferences, qualification_level')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      const [leadResult, profileResult, appsResult, shortlistsResult, checklistResult] = await Promise.all([
+        supabase
+          .from('student_leads')
+          .select('preferred_countries, preferences, qualification_level')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('profiles')
+          .select('interested_countries, degree_level')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('applications')
+          .select('university_id')
+          .eq('user_id', user.id),
+        supabase
+          .from('university_shortlists')
+          .select('university_id, student_id, student_email, email'),
+        supabase
+          .from('document_checklists')
+          .select('*')
+          .eq('is_active', true)
+          .order('display_order', { ascending: true }),
+      ]);
 
+      const lead = leadResult.data;
+      const profile = profileResult.data;
       const extras = ((lead?.preferences as Record<string, any> | null) || {});
-      const countries: string[] = (lead?.preferred_countries || extras.interested_countries || []) as string[];
-      const degreeLevel = extras.degree_level || lead?.qualification_level || 'Masters';
+      const rawCountries = (lead?.preferred_countries || extras.interested_countries || profile?.interested_countries || []) as string[];
+      const countries = Array.from(new Set(rawCountries.map((item) => normalizeCountry(item)).filter(Boolean)));
+      const degreeLevel = normalizeDegreeLevel(
+        extras.degree_level || lead?.qualification_level || profile?.degree_level || 'Masters'
+      );
 
-      const { data, error } = await supabase
-        .from('document_checklists')
-        .select('*')
-        .eq('is_active', true)
-        .order('display_order', { ascending: true });
+      const universityIds = Array.from(new Set([
+        ...(appsResult.data || []).map((row) => row.university_id).filter(Boolean),
+        ...(shortlistsResult.data || [])
+          .filter((row) =>
+            String(row.student_id) === String(user.id) ||
+            (user.email && (row.student_email === user.email || row.email === user.email))
+          )
+          .map((row) => row.university_id)
+          .filter(Boolean),
+      ])) as string[];
 
-      if (error) throw error;
+      setProfileSummary({ countries, degreeLevel });
 
-      const countrySet = new Set(countries.map((country) => String(country).trim().toLowerCase()).filter(Boolean));
+      if (checklistResult.error) throw checklistResult.error;
 
-      const matched = (data || []).filter((item) => {
-        const itemCountries = [item.country, ...(item.countries || [])]
-          .filter(Boolean)
-          .map((country) => String(country).trim().toLowerCase());
-        const countryOk =
-          countrySet.size === 0 ||
-          itemCountries.includes('all') ||
-          itemCountries.some((country) => countrySet.has(country));
-        const degreeTypes = item.degree_types || (item.degree_type ? [item.degree_type] : []);
-        const degreeOk =
-          degreeTypes.length === 0 ||
-          degreeTypes.includes(degreeLevel) ||
-          degreeTypes.includes('All');
-        return countryOk && degreeOk;
+      const matched = filterDocumentChecklistsForProfile(checklistResult.data || [], {
+        countries,
+        degreeLevel,
+        universityIds,
       });
 
-      const unique = new Map<string, DocumentChecklist>();
-      matched.forEach((item) => {
-        if (!unique.has(item.document_type)) {
-          unique.set(item.document_type, item);
-        }
-      });
-
-      const checklistItems = withIdentityDocuments(Array.from(unique.values())).map(withPracticalUploadLimit);
-      setChecklist(checklistItems.length > 0 ? checklistItems : DEFAULT_CHECKLIST.map(withPracticalUploadLimit));
+      setChecklist(matched.map(withPracticalUploadLimit));
     } catch (error: any) {
       console.error('Error fetching checklist:', error);
-      setChecklist(DEFAULT_CHECKLIST.map(withPracticalUploadLimit));
+      setChecklist([]);
     }
   };
 
@@ -390,9 +357,12 @@ export function StudentDocuments() {
 
       await fetchAllData(true);
     } catch (error: any) {
+      const message = String(error?.message || 'Upload failed');
       toast({
         title: 'Upload failed',
-        description: error.message,
+        description: message.includes('reach') || message.includes('timed out')
+          ? 'Could not save the file on the server. Check your connection and try again.'
+          : message,
         variant: 'destructive'
       });
     } finally {
@@ -499,8 +469,14 @@ export function StudentDocuments() {
       || documents.find((doc) => doc.document_type === documentType);
   };
 
+  const requiredTypes = new Set([
+    ...checklist.filter((item) => item.is_required).map((item) => item.document_type),
+    ...requests.filter((req) => req.is_mandatory).map((req) => req.document_type),
+  ]);
   const submittedTypes = new Set(
-    documents.filter((doc) => doc.status !== 'rejected').map((doc) => doc.document_type)
+    documents
+      .filter((doc) => doc.status !== 'rejected' && requiredTypes.has(doc.document_type))
+      .map((doc) => doc.document_type)
   );
   const submittedCount = submittedTypes.size;
   const rejectedCount = documents.filter((doc) => doc.status === 'rejected' && !submittedTypes.has(doc.document_type)).length;
@@ -661,7 +637,9 @@ export function StudentDocuments() {
           <CardHeader className="p-4 md:p-6">
             <CardTitle className="text-base md:text-lg">Required Documents</CardTitle>
             <CardDescription className="text-xs md:text-sm">
-              Upload the matching document for each item. A resume cannot be submitted as Original Degree (OD).
+              {profileSummary.countries.length > 0
+                ? `Based on your profile: ${profileSummary.countries.join(', ')}${profileSummary.degreeLevel ? ` · ${profileSummary.degreeLevel}` : ''}. Upload the matching document for each item.`
+                : 'Upload the matching document for each item. A resume cannot be submitted as Original Degree (OD).'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 p-4 pt-0 md:p-6 md:pt-0">
@@ -780,9 +758,13 @@ export function StudentDocuments() {
         <Card className="glass-card">
           <CardContent className="p-12 text-center">
             <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <h3 className="text-xl font-semibold mb-2">Complete Your Profile First</h3>
+            <h3 className="text-xl font-semibold mb-2">
+              {profileSummary.countries.length === 0 ? 'Complete Your Profile First' : 'No Required Documents Yet'}
+            </h3>
             <p className="text-muted-foreground">
-              Please complete your profile with your interested countries and degree level to see required documents.
+              {profileSummary.countries.length === 0
+                ? 'Add your interested countries and degree level on My Profile to see required documents.'
+                : `No document requirements have been configured yet for ${profileSummary.countries.join(', ')}${profileSummary.degreeLevel ? ` (${profileSummary.degreeLevel})` : ''}. Your counselor will add them from the admin portal.`}
             </p>
           </CardContent>
         </Card>

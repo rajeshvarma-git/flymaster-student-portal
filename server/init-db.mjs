@@ -127,7 +127,7 @@ if (users.rows[0].count === 0) {
         max_file_size_mb: 20,
         allowed_file_types,
         country: "All",
-        countries: [],
+        countries: ["All"],
         degree_type: "All",
         degree_types: ["All"],
         display_order,
@@ -137,6 +137,33 @@ if (users.rows[0].count === 0) {
 
   rows.push(["universities", "uni-ku", { id: "uni-ku", name: "Kathmandu University", country: "Nepal", city: "Dhulikhel", ranking: 1, is_active: true, website_url: "https://ku.edu.np" }]);
   rows.push(["universities", "uni-tu", { id: "uni-tu", name: "Tribhuvan University IOE Pulchowk", country: "Nepal", city: "Lalitpur", ranking: 2, is_active: true, website_url: "https://ioe.edu.np" }]);
+
+  const documentCountries = [
+    ["doc-country-all", "All", "ALL", 0],
+    ["doc-country-usa", "USA", "USA", 1],
+    ["doc-country-uk", "UK", "UK", 2],
+    ["doc-country-canada", "Canada", "CA", 3],
+    ["doc-country-australia", "Australia", "AU", 4],
+    ["doc-country-germany", "Germany", "DE", 5],
+    ["doc-country-nepal", "Nepal", "NP", 6],
+    ["doc-country-india", "India", "IN", 7],
+  ];
+  for (const [id, name, code, display_order] of documentCountries) {
+    rows.push(["document_countries", id, { id, name, code, is_active: true, display_order }]);
+  }
+
+  const documentDegrees = [
+    ["doc-degree-all", "All", "ALL", 0],
+    ["doc-degree-bachelors", "Bachelors", "UG", 1],
+    ["doc-degree-masters", "Masters", "PG", 2],
+    ["doc-degree-phd", "PhD", "PHD", 3],
+    ["doc-degree-diploma", "Diploma", "DIP", 4],
+    ["doc-degree-certificate", "Certificate", "CERT", 5],
+    ["doc-degree-other", "Other", "OTHER", 6],
+  ];
+  for (const [id, name, code, display_order] of documentDegrees) {
+    rows.push(["document_degree_types", id, { id, name, code, is_active: true, display_order }]);
+  }
 
   for (const [tableName, id, data] of rows) {
     await app.query("INSERT INTO app_records (id, table_name, data) VALUES ($1, $2, $3)", [id, tableName, JSON.stringify(data)]);

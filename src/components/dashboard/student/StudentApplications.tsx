@@ -27,7 +27,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { notifyAssignedCounselors } from '@/lib/notifyCounselorsOfStudentDocument';
 import { collectStudentShortlistKeys, emailsMatch, shortlistBelongsToStudent } from '@/lib/studentShortlists';
-import { getFallbackUniversities } from '@/lib/universityRecommendations';
+import { matchesAnyCountry, normalizeCountry } from '@/lib/universityRecommendations';
 import {
   BookOpen,
   Calendar,
@@ -169,7 +169,7 @@ export function StudentApplications() {
     try {
       if (!silent) setLoading(true);
 
-      const [appsRes, unisRes, shortlistsRes, leadsRes, favoritesRes] = await Promise.all([
+      const [appsRes, unisRes, shortlistsRes, leadsRes, favoritesRes, profileRes] = await Promise.all([
         supabase
           .from('applications')
           .select('*')
@@ -181,6 +181,7 @@ export function StudentApplications() {
           .select('id, student_id, student_email, email, university_id, university_name, course_name, location, application_deadline, priority_level, counselor_notes, status'),
         supabase.from('student_leads').select('id, user_id, email, preferred_countries'),
         supabase.from('user_favorites').select('university_id').eq('user_id', user.id),
+        supabase.from('profiles').select('interested_countries').eq('user_id', user.id).maybeSingle(),
       ]);
 
       if (appsRes.error) throw appsRes.error;
@@ -190,17 +191,14 @@ export function StudentApplications() {
       const myLead = (leadsRes.data || []).find((lead: any) => String(lead.user_id) === String(user.id))
         || (leadsRes.data || []).find((lead: any) => emailsMatch(lead.email, user.email));
       const preferredCountries = Array.isArray(myLead?.preferred_countries)
-        ? myLead.preferred_countries
-        : [];
-      const dest = preferredCountries.length
-        ? preferredCountries
-        : ['USA', 'UK', 'Canada', 'Australia', 'Germany'];
+        ? myLead.preferred_countries.map((item) => normalizeCountry(item)).filter(Boolean)
+        : (profileRes.data?.interested_countries || []).map((item: string) => normalizeCountry(item)).filter(Boolean);
 
-      const catalog = (unisRes.data || []) as UniversityOption[];
-      const names = new Set(catalog.map((uni) => uni.name.toLowerCase()));
-      const fallbacks = getFallbackUniversities(dest).filter((uni) => !names.has(uni.name.toLowerCase()));
+      const catalog = ((unisRes.data || []) as UniversityOption[]).filter((uni) =>
+        preferredCountries.length === 0 || matchesAnyCountry(uni.country, preferredCountries)
+      );
       const favoriteIds = new Set((favoritesRes.data || []).map((row: any) => row.university_id));
-      const combined = [...catalog, ...fallbacks].sort((a, b) => {
+      const combined = [...catalog].sort((a, b) => {
         const aFav = favoriteIds.has(a.id) ? 0 : 1;
         const bFav = favoriteIds.has(b.id) ? 0 : 1;
         if (aFav !== bFav) return aFav - bFav;

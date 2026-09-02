@@ -20,16 +20,55 @@ import {
 } from "./studentAuth";
 
 const API_PATHS = new Set(["/__local_db", "/__db_health", "/__auth", "/__session", "/__storage"]);
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export function isApiPath(pathname: string) {
   return API_PATHS.has(pathname);
 }
 
+function applyCors(req: IncomingMessage, res: ServerResponse) {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+}
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    let total = 0;
+    req.on("data", (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > MAX_UPLOAD_BYTES) {
+        reject(new Error(`Request body too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)`));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
+function readRawBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+    req.on("data", (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > MAX_UPLOAD_BYTES) {
+        reject(new Error(`Upload too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)`));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
 }
@@ -50,10 +89,23 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
   const parsed = new URL(req.url || "/", "http://localhost");
   const url = parsed.pathname;
 
+  applyCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return;
+  }
+
   try {
     if (url === "/__db_health") {
+      await ensureSchema();
       const info = await pingPostgres();
-      sendJson(res, 200, { ok: true, ...info });
+      const state = await readAppState({ table: "document_checklists" });
+      sendJson(res, 200, {
+        ok: true,
+        ...info,
+        documentChecklists: (state.tables.document_checklists || []).length,
+      });
       return;
     }
 
@@ -115,9 +167,25 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
     }
 
     if (url === "/__storage" && req.method === "PUT") {
-      const body = JSON.parse((await readBody(req)) || "{}");
-      await writeStorageFile(body.path, body.dataUrl);
-      sendJson(res, 200, { ok: true, path: body.path });
+      const contentType = String(req.headers["content-type"] || "");
+      if (contentType.includes("application/json")) {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        await writeStorageFile(body.path, body.dataUrl);
+        sendJson(res, 200, { ok: true, path: body.path });
+        return;
+      }
+
+      const filePath = parsed.searchParams.get("path") || "";
+      if (!filePath) {
+        sendJson(res, 400, { error: "path query parameter is required" });
+        return;
+      }
+
+      const buffer = await readRawBody(req);
+      const mime = contentType.split(";")[0]?.trim() || "application/octet-stream";
+      const dataUrl = `data:${mime};base64,${buffer.toString("base64")}`;
+      await writeStorageFile(filePath, dataUrl);
+      sendJson(res, 200, { ok: true, path: filePath });
       return;
     }
 

@@ -4,6 +4,7 @@ import { readFile } from "fs/promises";
 import { extname, join } from "path";
 import { fileURLToPath } from "url";
 import { handleApiRequest, isApiPath } from "./httpApi";
+import { ensureSchema } from "./postgres";
 
 const distDir = join(fileURLToPath(new URL(".", import.meta.url)), "../dist");
 const port = Number(process.env.PORT || 8080);
@@ -72,3 +73,7 @@ createServer(async (req, res) => {
 }).listen(port, "0.0.0.0", () => {
   console.log(`Fly AI Pathfinder listening on 0.0.0.0:${port}`);
 });
+
+ensureSchema()
+  .then(() => console.log("PostgreSQL schema and document defaults ready"))
+  .catch((error) => console.error("Database initialization failed:", error));

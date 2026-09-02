@@ -391,15 +391,6 @@ class QueryBuilder {
   }
 }
 
-function fileToDataUrl(file: File | Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 function dataUrlToBlob(dataUrl: string) {
   const [header, data] = dataUrl.split(",");
   const mime = header.match(/data:(.*?);/)?.[1] || "application/octet-stream";
@@ -539,12 +530,13 @@ export const supabase = {
     from(_bucket: string) {
       return {
         async upload(filePath: string, file: File | Blob) {
-          const dataUrl = await fileToDataUrl(file);
-          await fetchJson(apiUrl("/__storage"), {
+          const mime = file.type || "application/octet-stream";
+          const uploadUrl = `${apiUrl("/__storage")}?path=${encodeURIComponent(filePath)}`;
+          await fetchJson(uploadUrl, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ path: filePath, dataUrl }),
-          }, 30000);
+            headers: { "Content-Type": mime },
+            body: file,
+          }, 120000);
           return { data: { path: filePath }, error: null };
         },
         async download(filePath: string) {
