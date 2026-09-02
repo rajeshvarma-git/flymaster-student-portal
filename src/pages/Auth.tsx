@@ -8,12 +8,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { GraduationCap, Mail, Lock, User, ArrowLeft } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { getDefaultRoute } from '@/lib/auth-utils';
 import { supabase } from '@/integrations/supabase/client';
 
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = (location.state as { from?: { pathname: string } } | null)?.from?.pathname;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -62,10 +64,10 @@ const Auth = () => {
   // Redirect if already authenticated (but not in recovery mode)
   useEffect(() => {
     if (user && !isRecoveryMode && !roleLoading && userRole) {
-      const dashboardRoute = getDefaultRoute(userRole);
-      navigate(dashboardRoute, { replace: true });
+      const destination = redirectTo || getDefaultRoute(userRole);
+      navigate(destination, { replace: true });
     }
-  }, [user, isRecoveryMode, roleLoading, userRole, navigate]);
+  }, [user, isRecoveryMode, roleLoading, userRole, navigate, redirectTo]);
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -285,9 +287,13 @@ const Auth = () => {
 
         <Card className="glass-card border-white/20">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Welcome</CardTitle>
+            <CardTitle className="text-2xl">
+              {redirectTo === '/chat' ? 'Sign in to use AI Chat' : 'Welcome'}
+            </CardTitle>
             <CardDescription>
-              Sign in to your account or create a new one to get started
+              {redirectTo === '/chat'
+                ? 'Please sign in or create an account to start chatting with our AI advisor'
+                : 'Sign in to your account or create a new one to get started'}
             </CardDescription>
           </CardHeader>
           
