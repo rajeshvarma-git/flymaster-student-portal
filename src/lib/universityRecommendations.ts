@@ -200,19 +200,5 @@ export async function getRecommendationsForProfile(conversationData: Record<stri
     }));
   }
 
-  return [
-    {
-      id: 'generic-1',
-      name: `Top universities in ${country || 'your chosen country'}`,
-      location: country || 'Selected destination',
-      programs: [programTitle(level, stream)],
-      tuitionFee: 'Varies by university',
-      duration: level === 'UG' ? '3-4 years' : '1-2 years',
-      deadline: 'A counselor will confirm intakes',
-      languageReq: 'Depends on the university',
-      postStudyVisa: visaInfo(country),
-      ranking: 'Matched to your destination',
-      website: undefined,
-    },
-  ];
+  return [];
 }

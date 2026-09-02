@@ -9,13 +9,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { GraduationCap, Mail, Lock, User, ArrowLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
-import { getDefaultRoute } from '@/lib/auth-utils';
+import { getDefaultRoute, resolvePostLoginRedirect, CHAT_PATH } from '@/lib/auth-utils';
 import { supabase } from '@/integrations/supabase/client';
 
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = (location.state as { from?: { pathname: string } } | null)?.from?.pathname;
+  const redirectTo = resolvePostLoginRedirect(
+    (location.state as { from?: { pathname: string } } | null)?.from?.pathname,
+    new URLSearchParams(location.search).get('redirect')
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -288,10 +291,10 @@ const Auth = () => {
         <Card className="glass-card border-white/20">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">
-              {redirectTo === '/chat' ? 'Sign in to use AI Chat' : 'Welcome'}
+              {redirectTo === CHAT_PATH ? 'Sign in to use AI Chat' : 'Welcome'}
             </CardTitle>
             <CardDescription>
-              {redirectTo === '/chat'
+              {redirectTo === CHAT_PATH
                 ? 'Please sign in or create an account to start chatting with our AI advisor'
                 : 'Sign in to your account or create a new one to get started'}
             </CardDescription>

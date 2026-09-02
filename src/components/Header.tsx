@@ -6,6 +6,8 @@ import { useSiteBranding } from "@/hooks/useSiteBranding";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
+import { useChatNavigation } from "@/hooks/useChatNavigation";
+import { CHAT_PATH } from "@/lib/auth-utils";
 
 interface WhatsAppConfig {
   phone_number?: string;
@@ -17,6 +19,7 @@ const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [whatsappConfig, setWhatsappConfig] = useState<WhatsAppConfig | null>(null);
   const { user, signOut } = useAuth();
+  const { requireAuthForChat } = useChatNavigation();
   const { branding, loading } = useSiteBranding();
 
   useEffect(() => {
@@ -42,7 +45,7 @@ const Header = () => {
     { name: "Features", href: "#features" },
     { name: "Universities", href: "/universities", isLink: true },
     { name: "Travel Agency", href: "/travel", isLink: true },
-    { name: "AI Chat", href: "/chat", isLink: true },
+    { name: "AI Chat", href: CHAT_PATH, isLink: true, requiresAuth: true },
     { name: "About", href: "#about" }
   ];
 
@@ -79,6 +82,7 @@ const Header = () => {
                   key={item.name} 
                   to={item.href} 
                   className="text-sm font-medium hover:text-primary transition-colors"
+                  onClick={item.requiresAuth ? requireAuthForChat : undefined}
                 >
                   {item.name}
                 </Link>
@@ -160,7 +164,10 @@ const Header = () => {
                     key={item.name} 
                     to={item.href} 
                     className="text-sm font-medium hover:text-primary transition-colors py-2" 
-                    onClick={() => setIsMenuOpen(false)}
+                    onClick={(event) => {
+                      if (item.requiresAuth) requireAuthForChat(event);
+                      setIsMenuOpen(false);
+                    }}
                   >
                     {item.name}
                   </Link>

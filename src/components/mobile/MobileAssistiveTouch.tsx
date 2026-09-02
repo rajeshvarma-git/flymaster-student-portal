@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CHAT_PATH, getAuthRedirectPath } from '@/lib/auth-utils';
 
 type MenuSlot = 'top' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'bottom';
 
@@ -76,7 +77,7 @@ function useAssistiveShortcuts(): ShortcutItem[] {
             : '/auth';
 
     return [
-      { id: 'chat', label: 'AI Chat', icon: MessageCircle, path: '/chat', slot: 'top' },
+      { id: 'chat', label: 'AI Chat', icon: MessageCircle, path: CHAT_PATH, slot: 'top' },
       { id: 'universities', label: 'Universities', icon: GraduationCap, path: '/universities', slot: 'top-left' },
       { id: 'travel', label: 'Travel', icon: Plane, path: '/travel', slot: 'top-right' },
       {
@@ -130,6 +131,7 @@ export function MobileAssistiveTouch() {
   const [dragging, setDragging] = useState(false);
   const [fabPos, setFabPos] = useState({ x: 16, y: 24 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const shortcuts = useAssistiveShortcuts();
@@ -150,9 +152,15 @@ export function MobileAssistiveTouch() {
   const handleSelect = useCallback(
     (path: string) => {
       setOpen(false);
+      if (path === CHAT_PATH && !user) {
+        navigate(getAuthRedirectPath(CHAT_PATH), {
+          state: { from: { pathname: CHAT_PATH } },
+        });
+        return;
+      }
       navigate(path);
     },
-    [navigate]
+    [navigate, user]
   );
 
   const onFabPointerDown = (e: React.PointerEvent) => {

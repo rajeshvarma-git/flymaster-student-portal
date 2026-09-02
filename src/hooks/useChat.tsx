@@ -1,6 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getRecommendationsForProfile } from '@/lib/universityRecommendations';
+import { validateChatStep } from '@/lib/chatValidation';
+import {
+  buildChatContext,
+  getActiveSteps,
+  buildWelcomeMessage,
+  type ChatStep,
+} from '@/lib/chatContext';
+import { useAuth } from '@/hooks/useAuth';
 import type { UniversityRecommendation } from '@/lib/universityRecommendations';
 
 export type { UniversityRecommendation };
@@ -16,87 +24,39 @@ interface ChatState {
   messages: ChatMessage[];
   conversationData: Record<string, any>;
   sessionId: string;
-  stepIndex: number;
   isLoading: boolean;
   otpMode: boolean;
   phoneNumber: string;
   universities: UniversityRecommendation[];
   showResults: boolean;
   showExpertHelp: boolean;
+  chatComplete: boolean;
 }
-
-const FUNNEL_STEPS = [
-  {
-    key: 'country',
-    question: "Hi there! 👋 I'm your AI study abroad advisor from Fly Masters. Which country would you love to study in?",
-    reply: (value: string) =>
-      `Great choice — ${value}! What is your highest qualification? (for example 12th, Bachelor's, or Master's)`,
-  },
-  {
-    key: 'qualification',
-    question: "What is your highest qualification?",
-    reply: (value: string) =>
-      `Got it, ${value}. Which field or program are you most interested in? (for example Computer Science, Business, or Nursing)`,
-  },
-  {
-    key: 'streamOrProgram',
-    question: 'Which field of study interests you?',
-    reply: (value: string) =>
-      `${value} is a strong path. What is your academic score — percentage or GPA?`,
-  },
-  {
-    key: 'academicScore',
-    question: 'What is your academic score?',
-    reply: (value: string) =>
-      `Thanks, ${value} noted. What is your estimated study budget? (for example 20 lakhs or $25,000)`,
-  },
-  {
-    key: 'budget',
-    question: 'What is your study budget?',
-    reply: (value: string) =>
-      `Budget noted: ${value}. What is your full name?`,
-  },
-  {
-    key: 'fullName',
-    question: 'What is your full name?',
-    reply: (value: string) =>
-      `Nice to meet you, ${value}! What email should we use for your university shortlist?`,
-  },
-  {
-    key: 'email',
-    question: 'What is your email address?',
-    reply: (value: string) =>
-      `Thanks. Last step — what is your phone number, including country code?`,
-  },
-  {
-    key: 'phone',
-    question: 'What is your phone number?',
-    reply: () =>
-      'Perfect — I have your profile. Let me find universities that match you.',
-  },
-] as const;
 
 const INITIAL_STATE: ChatState = {
   messages: [],
   conversationData: {},
   sessionId: '',
-  stepIndex: 0,
   isLoading: false,
   otpMode: false,
   phoneNumber: '',
   universities: [],
   showResults: false,
   showExpertHelp: false,
+  chatComplete: false,
 };
 
 let cachedSessionId: string | null = null;
 
 export const useChat = () => {
+  const { user, userProfile, profileLoading } = useAuth();
   const [state, setState] = useState<ChatState>(INITIAL_STATE);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionIdRef = useRef('');
   const stepIndexRef = useRef(0);
   const dataRef = useRef<Record<string, any>>({});
+  const activeStepsRef = useRef<ChatStep[]>([]);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -111,18 +71,20 @@ export const useChat = () => {
     setState((prev) => ({ ...prev, messages: [...prev.messages, newMessage] }));
   }, []);
 
-  const persistInBackground = useCallback(async (message: string, conversationData: Record<string, any>) => {
+  const persistSession = useCallback(async (conversationData: Record<string, any>, stage: number) => {
     const sessionId = sessionIdRef.current;
     if (!sessionId) return;
 
     try {
-      await supabase.functions.invoke('chat-ai', {
-        body: { message, sessionId, conversationData },
-      });
+      await supabase.from('chat_sessions').update({
+        conversation_data: conversationData,
+        current_stage: stage,
+        user_id: user?.id ?? null,
+      }).eq('id', sessionId);
     } catch (error) {
-      console.warn('Chat persist skipped:', error);
+      console.warn('Chat session update skipped:', error);
     }
-  }, []);
+  }, [user?.id]);
 
   const fetchUniversities = useCallback(async (conversationData: Record<string, any>) => {
     try {
@@ -130,25 +92,41 @@ export const useChat = () => {
       setState((prev) => ({
         ...prev,
         universities,
-        showResults: true,
+        showResults: universities.length > 0,
         showExpertHelp: true,
         isLoading: false,
+        chatComplete: true,
+        conversationData,
       }));
-      addMessage({
-        type: 'ai',
-        content: `🎓 Here are universities in ${conversationData.country} that match your profile. A counselor can help you apply.`,
-      });
+
+      if (universities.length > 0) {
+        addMessage({
+          type: 'ai',
+          content: `🎓 Here are universities in ${conversationData.country} that match your profile. A counselor can help you apply.`,
+        });
+      } else {
+        addMessage({
+          type: 'ai',
+          content: `I couldn't find matching universities for ${conversationData.country}. Our counselors can still build a shortlist for you.`,
+        });
+      }
+
+      await persistSession(conversationData, activeStepsRef.current.length + 1);
     } catch (error) {
       console.error('Error fetching universities:', error);
-      setState((prev) => ({ ...prev, showExpertHelp: true, isLoading: false }));
+      setState((prev) => ({ ...prev, showExpertHelp: true, isLoading: false, chatComplete: true }));
       addMessage({
         type: 'ai',
         content: 'Your profile is ready. Our counselors can now shortlist universities in your chosen country.',
       });
     }
-  }, [addMessage]);
+  }, [addMessage, persistSession]);
 
   const initializeChat = useCallback(async () => {
+    if (!user || profileLoading || initializedRef.current) return;
+
+    initializedRef.current = true;
+
     if (!cachedSessionId) {
       cachedSessionId = crypto.randomUUID();
     }
@@ -156,7 +134,10 @@ export const useChat = () => {
     const sessionUuid = cachedSessionId;
     sessionIdRef.current = sessionUuid;
     stepIndexRef.current = 0;
-    dataRef.current = {};
+
+    const context = buildChatContext(user, userProfile);
+    dataRef.current = context;
+    activeStepsRef.current = getActiveSteps(context);
 
     try {
       const textSessionId = `chat_${sessionUuid.slice(0, 8)}`;
@@ -164,78 +145,106 @@ export const useChat = () => {
         id: sessionUuid,
         session_id: textSessionId,
         current_stage: 1,
-        conversation_data: {},
-        user_id: null,
+        conversation_data: context,
+        user_id: user.id,
       });
     } catch (error) {
       console.warn('Chat session insert skipped:', error);
     }
 
-    setState((prev) => {
-      if (prev.messages.length > 0) {
-        return { ...prev, sessionId: sessionUuid, stepIndex: 0 };
-      }
-      return {
-        ...prev,
-        sessionId: sessionUuid,
-        stepIndex: 0,
-        messages: [{
-          id: 'welcome',
-          type: 'ai',
-          content: FUNNEL_STEPS[0].question,
-          timestamp: new Date(),
-        }],
-      };
-    });
-  }, []);
+    const welcomeMessage = buildWelcomeMessage(context, activeStepsRef.current, userProfile);
+
+    setState((prev) => ({
+      ...prev,
+      sessionId: sessionUuid,
+      conversationData: context,
+      messages: [{
+        id: 'welcome',
+        type: 'ai',
+        content: welcomeMessage,
+        timestamp: new Date(),
+      }],
+    }));
+
+    if (activeStepsRef.current.length === 0) {
+      setState((prev) => ({ ...prev, isLoading: true }));
+      await fetchUniversities(context);
+    }
+  }, [user, userProfile, profileLoading, fetchUniversities]);
+
+  useEffect(() => {
+    initializedRef.current = false;
+    void initializeChat();
+  }, [initializeChat]);
 
   const sendMessage = useCallback(async (message: string) => {
     const trimmed = message.trim();
-    if (!trimmed || state.isLoading) return;
+    if (!trimmed || state.isLoading || state.chatComplete) return;
 
     addMessage({ type: 'user', content: trimmed });
     setState((prev) => ({ ...prev, isLoading: true }));
 
-    const step = FUNNEL_STEPS[stepIndexRef.current] ?? FUNNEL_STEPS[0];
-    const nextData = {
-      ...dataRef.current,
-      [step.key]: trimmed,
-    };
-
-    if (step.key === 'phone') {
-      nextData.phone = trimmed;
+    const steps = activeStepsRef.current;
+    const step = steps[stepIndexRef.current];
+    if (!step) {
+      setState((prev) => ({ ...prev, isLoading: false }));
+      return;
     }
 
+    const validation = validateChatStep(step.key, trimmed);
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    if (!validation.valid) {
+      addMessage({ type: 'ai', content: validation.error! });
+      setState((prev) => ({ ...prev, isLoading: false }));
+      return;
+    }
+
+    const storedValue = validation.normalized ?? trimmed;
+    const nextData = {
+      ...dataRef.current,
+      [step.key]: storedValue,
+    };
+
     dataRef.current = nextData;
-    const nextStepIndex = Math.min(stepIndexRef.current + 1, FUNNEL_STEPS.length);
+    const nextStepIndex = stepIndexRef.current + 1;
     stepIndexRef.current = nextStepIndex;
 
     setState((prev) => ({
       ...prev,
       conversationData: nextData,
-      stepIndex: nextStepIndex,
-      phoneNumber: step.key === 'phone' ? trimmed : prev.phoneNumber,
     }));
 
-    persistInBackground(trimmed, nextData);
+    await persistSession(nextData, nextStepIndex);
 
-    await new Promise((resolve) => setTimeout(resolve, 450));
+    if (nextStepIndex >= steps.length) {
+      const finalData = buildChatContext(user, userProfile);
+      Object.assign(finalData, nextData);
 
-    if (nextStepIndex >= FUNNEL_STEPS.length) {
       addMessage({
         type: 'ai',
-        content: step.reply(trimmed),
+        content: step.finalReply?.(storedValue) ?? step.reply(storedValue),
       });
-      await fetchUniversities(nextData);
+
+      dataRef.current = finalData;
+      await fetchUniversities(finalData);
       return;
     }
 
     addMessage({
       type: 'ai',
-      content: step.reply(trimmed),
+      content: step.reply(storedValue),
     });
     setState((prev) => ({ ...prev, isLoading: false }));
-  }, [state.isLoading, addMessage, persistInBackground, fetchUniversities]);
+  }, [
+    state.isLoading,
+    state.chatComplete,
+    addMessage,
+    persistSession,
+    fetchUniversities,
+    user,
+    userProfile,
+  ]);
 
   return {
     ...state,

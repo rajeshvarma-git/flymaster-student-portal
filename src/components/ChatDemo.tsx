@@ -3,9 +3,12 @@ import { Bot, User, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import chatDemoImage from "@/assets/chat-demo.jpg";
+import { useChatNavigation } from "@/hooks/useChatNavigation";
+import { CHAT_PATH } from "@/lib/auth-utils";
 
 const ChatDemo = () => {
   const [currentStep, setCurrentStep] = useState(0);
+  const { requireAuthForChat } = useChatNavigation();
   
   const conversation = [
     { type: 'ai', message: "Hi! I'm your AI university advisor. Where would you like to study?" },
@@ -89,7 +92,7 @@ const ChatDemo = () => {
               />
             </div>
             
-            <Link to="/chat" className="absolute -top-4 -right-4 bg-gradient-primary text-white px-4 py-2 rounded-full text-sm font-semibold shadow-hover hover:scale-105 transition-transform">
+            <Link to={CHAT_PATH} onClick={requireAuthForChat} className="absolute -top-4 -right-4 bg-gradient-primary text-white px-4 py-2 rounded-full text-sm font-semibold shadow-hover hover:scale-105 transition-transform">
               Try it now!
             </Link>
           </div>
@@ -97,7 +100,7 @@ const ChatDemo = () => {
 
         <div className="text-center mt-12">
           <Button variant="premium" size="xl" className="group" asChild>
-            <Link to="/chat">
+            <Link to={CHAT_PATH} onClick={requireAuthForChat}>
               Start Your AI Consultation
               <Bot className="w-5 h-5 group-hover:scale-110 transition-transform" />
             </Link>

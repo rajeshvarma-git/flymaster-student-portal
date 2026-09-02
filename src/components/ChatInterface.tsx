@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useChat } from '@/hooks/useChat';
 import EnhancedMessageBubble from '@/components/chat/EnhancedMessageBubble';
@@ -16,20 +16,10 @@ const ChatInterface: React.FC = () => {
     universities,
     showResults,
     showExpertHelp,
+    chatComplete,
     messagesEndRef,
-    initializeChat,
     sendMessage,
   } = useChat();
-
-  // Initialize chat session on mount
-  useEffect(() => {
-    initializeChat();
-  }, [initializeChat]);
-
-
-
-
-
 
   return (
     <div 
@@ -38,7 +28,6 @@ const ChatInterface: React.FC = () => {
     >
       <Card className="flex-1 flex flex-col shadow-hover backdrop-blur-sm border-border/50">
         <CardContent className="flex-1 flex flex-col p-0">
-          {/* Messages Area */}
           <div 
             className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-1 bg-gradient-to-b from-background/50 to-background"
             role="log"
@@ -53,17 +42,14 @@ const ChatInterface: React.FC = () => {
               />
             ))}
             
-            {/* Typing indicator */}
             {isLoading && <EnhancedTypingIndicator />}
 
-            {/* University Results */}
             {showResults && universities.length > 0 && (
               <div className="animate-scale-in">
                 <UniversityResults universities={universities} />
               </div>
             )}
 
-            {/* Expert Help Options */}
             {showExpertHelp && (
               <div className="animate-slide-in-left">
                 <ExpertHelpSection />
@@ -73,12 +59,12 @@ const ChatInterface: React.FC = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
           <ChatInput 
             onSendMessage={sendMessage}
             isLoading={isLoading}
             otpMode={otpMode}
             phoneNumber={phoneNumber}
+            disabled={chatComplete}
           />
         </CardContent>
       </Card>

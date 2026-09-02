@@ -3,12 +3,13 @@ import { Navigate, useLocation } from 'react-router-dom';
 import ChatInterface from '@/components/ChatInterface';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useAuth } from '@/hooks/useAuth';
+import { CHAT_PATH, getAuthRedirectPath } from '@/lib/auth-utils';
 
 const Chat: React.FC = () => {
-  const { user, loading } = useAuth();
+  const { user, loading, profileLoading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -17,7 +18,13 @@ const Chat: React.FC = () => {
   }
 
   if (!user) {
-    return <Navigate to="/auth" state={{ from: location }} replace />;
+    return (
+      <Navigate
+        to={getAuthRedirectPath(CHAT_PATH)}
+        state={{ from: location }}
+        replace
+      />
+    );
   }
 
   return (

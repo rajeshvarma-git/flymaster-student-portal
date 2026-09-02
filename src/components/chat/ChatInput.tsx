@@ -100,9 +100,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </p>
       )}
       
-      {!isLoading && (
+      {!isLoading && !disabled && (
         <p className="text-xs text-muted-foreground/60 mt-1 text-center">
           Press Enter to send • Shift + Enter for new line
+        </p>
+      )}
+
+      {disabled && (
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          Chat complete. Contact our counselors below for next steps.
         </p>
       )}
     </div>

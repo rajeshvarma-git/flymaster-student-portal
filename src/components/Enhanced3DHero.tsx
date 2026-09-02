@@ -3,9 +3,12 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useRef } from 'react';
+import { useChatNavigation } from '@/hooks/useChatNavigation';
+import { CHAT_PATH } from '@/lib/auth-utils';
 
 export default function Enhanced3DHero() {
   const ref = useRef(null);
+  const { requireAuthForChat } = useChatNavigation();
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start start", "end start"]
@@ -127,7 +130,7 @@ export default function Enhanced3DHero() {
             transition={{ duration: 0.6, delay: 0.9 }}
             className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
-            <Link to="/chat">
+            <Link to={CHAT_PATH} onClick={requireAuthForChat}>
               <motion.div
                 whileHover={{ scale: 1.05, y: -5 }}
                 whileTap={{ scale: 0.95 }}

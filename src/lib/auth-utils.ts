@@ -59,3 +59,19 @@ export const getDefaultRoute = (role: UserRole | null): string => {
   if (role) return '/dashboard';
   return '/';
 };
+
+export const CHAT_PATH = '/chat';
+
+export const getAuthRedirectPath = (returnPath: string) =>
+  `/auth?redirect=${encodeURIComponent(returnPath)}`;
+
+export const resolvePostLoginRedirect = (
+  statePath?: string | null,
+  queryPath?: string | null
+): string | null => {
+  const candidate = statePath || queryPath;
+  if (candidate && candidate.startsWith('/') && !candidate.startsWith('//')) {
+    return candidate;
+  }
+  return null;
+};
