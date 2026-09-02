@@ -108,10 +108,10 @@ const Auth = () => {
     
     if (error) {
       setError(error.message);
-      setIsLoading(false);
     } else {
       setSuccess('Account created. You are signed in on this browser only — other students can stay signed in on theirs.');
     }
+    setIsLoading(false);
   };
 
   const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {

@@ -13,16 +13,18 @@ ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
 
-# Runtime stage — serve static files (no Caddy)
+# Runtime stage — API + static files
 FROM node:22-alpine
 WORKDIR /app
 
-RUN npm install -g serve@14.2.4
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
+COPY server ./server
 
 ENV NODE_ENV=production
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "serve dist -s -l tcp://0.0.0.0:${PORT:-8080}"]
+CMD ["npx", "tsx", "server/production.ts"]

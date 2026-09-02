@@ -446,7 +446,10 @@ export const supabase = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "signin", email: String(email || "").trim(), password }),
         });
-        const session = payload.session as Session;
+        const session = payload.session as Session | undefined;
+        if (!session?.user) {
+          throw new Error(payload.error || "Sign-in failed. The server did not return a session.");
+        }
         await saveSession(session);
         authListeners.forEach((fn) => fn("SIGNED_IN", session));
         return { data: { user: session.user, session }, error: null };
@@ -474,7 +477,10 @@ export const supabase = {
             user_metadata: options?.data || {},
           }),
         });
-        const session = payload.session as Session;
+        const session = payload.session as Session | undefined;
+        if (!session?.user) {
+          throw new Error(payload.error || "Sign-up failed. Make sure the server API is running and DATABASE_URL is configured.");
+        }
         await saveSession(session);
         authListeners.forEach((fn) => fn("SIGNED_IN", session));
         return { data: { user: session.user, session }, error: null };

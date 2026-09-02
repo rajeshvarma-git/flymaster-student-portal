@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
-    "start": "serve dist -s -l tcp://0.0.0.0:${PORT:-8080}",
+    "start": "tsx server/production.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "db:init": "node --env-file=.env server/init-db.mjs",
@@ -80,6 +80,7 @@
     "start-server-and-test": "^2.0.13",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.23.13",
     "vaul": "^0.9.9",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76"
