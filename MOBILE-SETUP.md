@@ -1,151 +1,99 @@
-# 📱 FlyMasters Mobile & PWA Setup
+# Fly Masters — Mobile App
 
-## ✅ Phase 4: Enhanced Mobile Experience - COMPLETED!
+Native mobile app for Fly Masters / Fly AI Pathfinder, built with **Capacitor 7** wrapping the React web app.
 
-This document outlines the complete mobile and PWA implementation for the FlyMasters application.
+## What's included
 
-## 🎯 Features Implemented
+- **Android project** (`android/`) — ready to open in Android Studio
+- **Student mobile UI** — bottom tab bar (Home, Universities, Documents, Chat, More)
+- **Counselor mobile UI** — bottom tab bar (Home, Leads, Students, Chat, More)
+- **Public mobile UI** — bottom nav on homepage, chat, universities, travel
+- **Capacitor plugins** — StatusBar, SplashScreen, Keyboard, App (back button)
+- **API routing** — mobile app calls your dev server or deployed backend via `VITE_API_URL`
 
-### Progressive Web App (PWA)
-- ✅ **Service Worker** - Offline functionality and caching
-- ✅ **Web App Manifest** - Native app-like installation
-- ✅ **App Icons** - Generated 192px and 512px icons
-- ✅ **Install Prompt** - Smart installation suggestions
-- ✅ **Offline Indicator** - Network status awareness
-- ✅ **Push Notifications** - Ready for engagement features
+## Quick start (Android)
 
-### Mobile-First Design
-- ✅ **Touch-Optimized Components** - Larger touch targets
-- ✅ **Mobile Navigation** - Bottom navigation bar for mobile
-- ✅ **Mobile Header** - Collapsible menu system
-- ✅ **Responsive Layouts** - Adaptive across all screen sizes
-- ✅ **Safe Area Support** - iPhone X+ notch compatibility
-- ✅ **Touch Animations** - Tactile feedback for interactions
+### 1. Start the backend (required)
 
-### Native Mobile Capabilities (Capacitor)
-- ✅ **Capacitor Integration** - Ready for iOS/Android builds
-- ✅ **Configuration Files** - Complete setup for native builds
-- ✅ **Splash Screen** - Branded loading experience
-- ✅ **Status Bar** - Native status bar styling
-- ✅ **Keyboard Management** - Proper keyboard handling
+The mobile app is a frontend shell. PostgreSQL + Vite must be running:
 
-## 🚀 Getting Started with Mobile
+```powershell
+cd "e:\fly-ai-pathfinder-main (1)\fly-ai-pathfinder-main"
+npm run dev
+```
 
-### PWA Installation (Users)
-1. Visit the app in a mobile browser
-2. Look for the "Install App" prompt
-3. Tap "Install Now" for native app experience
-4. Enjoy offline functionality and faster loading
+Dev server runs at **http://localhost:8087**.
 
-### Native Mobile Development
+### 2. Build and sync
 
-#### Prerequisites
-- Node.js and npm installed
-- For iOS: Mac with Xcode
-- For Android: Android Studio
+```powershell
+npm run mobile:build
+```
 
-#### Setup Steps
-1. **Export to GitHub** - Use the "Export to GitHub" button in Lovable
-2. **Clone locally**:
-   ```bash
-   git clone <your-repo-url>
-   cd <project-folder>
-   npm install
-   ```
+### 3. Open in Android Studio
 
-3. **Add platforms**:
-   ```bash
-   # For iOS (requires Mac)
-   npx cap add ios
-   
-   # For Android
-   npx cap add android
-   ```
+```powershell
+npm run mobile:android
+```
 
-4. **Build and sync**:
-   ```bash
-   npm run build
-   npx cap sync
-   ```
+Then run on an emulator or physical device from Android Studio.
 
-5. **Run on device/emulator**:
-   ```bash
-   # For iOS
-   npx cap run ios
-   
-   # For Android
-   npx cap run android
-   ```
+### 4. Physical device on same Wi‑Fi
 
-## 📋 Mobile Features Overview
+Create `.env` with your PC's LAN IP:
 
-### Dashboard Features
-- **Sidebar Navigation** - Collapsible on mobile
-- **Profile Management** - Touch-friendly forms
-- **Document Upload** - Mobile camera integration ready
-- **University Favorites** - Swipe-friendly cards
-- **Chat History** - Expandable conversation view
+```
+VITE_API_URL=http://192.168.1.10:8087
+```
 
-### PWA Capabilities
-- **Offline Mode** - Works without internet
-- **Background Sync** - Updates when online
-- **App Shortcuts** - Quick access to key features
-- **Push Notifications** - Re-engagement ready
+Rebuild (`npm run mobile:build`) before syncing again.
 
-### Performance Optimizations
-- **Lazy Loading** - Images load as needed
-- **Service Worker Caching** - Faster subsequent visits
-- **Optimized Assets** - Compressed images and code
-- **Touch Debouncing** - Prevents accidental taps
+> Android emulator automatically uses `http://10.0.2.2:8087` when `VITE_API_URL` is unset.
 
-## 🔧 Configuration Files
+## npm scripts
 
-### Key Files Added/Modified:
-- `public/manifest.json` - PWA configuration
-- `public/sw.js` - Service worker for offline functionality
-- `capacitor.config.ts` - Native app configuration
-- `src/hooks/usePWA.tsx` - PWA state management
-- `src/components/MobileBottomNav.tsx` - Mobile navigation
-- `src/components/MobileHeader.tsx` - Mobile header
-- `src/components/PWAInstallPrompt.tsx` - Installation prompt
-- `src/components/TouchOptimized.tsx` - Mobile-friendly components
+| Script | Description |
+|--------|-------------|
+| `npm run mobile:build` | Production build + `cap sync` |
+| `npm run mobile:android` | Build, sync, open Android Studio |
+| `npm run mobile:run:android` | Build, sync, run on connected device/emulator |
+| `npm run mobile:ios` | Build, sync, open Xcode (Mac only) |
 
-## 📊 What's Next: Additional Features Possible
+## Mobile UX by role
 
-### Phase 5: Community & Social (Future)
-- User forums and discussions
-- Peer-to-peer chat system
-- University-specific communities
-- Anonymous chat options
+### Public (not logged in)
+Bottom tabs: Home · AI Chat · Universities · Travel
 
-### Phase 6: Advanced Features (Future)
-- Push notification system
-- Scholarship alert subscriptions
-- Real-time application tracking
-- Advanced analytics dashboard
+### Student (`/student/*`)
+- Top header with notifications bell
+- Bottom tabs: Home · Universities · Documents · Chat · More
+- More sheet: Profile, Shortlists, Applications, Telecaller, Notifications
 
-## 🏆 Success Metrics
+### Counselor (`/counselor/*`)
+- Top header with back navigation
+- Bottom tabs: Home · Leads · Students · Chat · More
+- More sheet: Shortlists, Documents, Notifications, Profile, Leave, Attendance, Salary
 
-The mobile implementation includes:
-- ✅ **10/10** Major features completed
-- ✅ **PWA Score: A+** - Full offline capability
-- ✅ **Mobile UX: Excellent** - Touch-optimized throughout
-- ✅ **Performance: Optimized** - Fast loading and interactions
-- ✅ **Cross-Platform: Ready** - iOS, Android, Web support
+## iOS (Mac required)
 
-## 📱 Testing the Mobile Experience
+```bash
+npx cap add ios
+npm run mobile:ios
+```
 
-1. **Mobile Browser**: Open in Chrome/Safari on mobile
-2. **Install as App**: Use the install prompt
-3. **Offline Test**: Turn off network and verify functionality
-4. **Touch Test**: Verify all interactive elements are touch-friendly
+## PWA (no app store)
 
-## 🔗 Resources
+Users can also install from the mobile browser via the PWA install prompt — no Android Studio needed.
 
-- [PWA Documentation](https://web.dev/progressive-web-apps/)
-- [Capacitor Documentation](https://capacitorjs.com/docs)
-- [Mobile Development Blog](https://lovable.dev/blogs/TODO)
+## Production deployment
+
+For a store-ready app without a local dev server:
+
+1. Deploy the Vite app + PostgreSQL API to a hosted URL
+2. Set `VITE_API_URL=https://your-api.example.com` before building
+3. Run `npm run mobile:build` and submit to Play Store / App Store
 
 ---
 
-**Status: ✅ COMPLETE** - Phase 4 implementation finished successfully!
+App ID: `in.flymasters.app`  
+App name: **Fly Masters**

@@ -15,8 +15,6 @@ import {
   Bell,
   GraduationCap,
   LogOut,
-  Menu,
-  X,
   Search,
   Command,
 } from 'lucide-react';
@@ -49,7 +47,6 @@ const accountItems: CounselorNavItem[] = [
 
 export function CounselorSidebar() {
   const { user, userProfile, signOut } = useAuth();
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
@@ -87,7 +84,6 @@ export function CounselorSidebar() {
                 : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
             }`
           }
-          onClick={() => setIsMobileOpen(false)}
         >
           <item.icon className="w-4 h-4 flex-shrink-0" />
           <span className="flex-1">{item.title}</span>
@@ -168,30 +164,9 @@ export function CounselorSidebar() {
         userId={user?.id}
       />
 
-      <Button
-        variant="ghost"
-        size="sm"
-        className="fixed top-4 left-4 z-50 md:hidden"
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-      >
-        {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </Button>
-
       <aside className="hidden md:flex w-64 flex-col bg-background/95 backdrop-blur-sm border-r border-border/20">
         <SidebarContent />
       </aside>
-
-      {isMobileOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 z-40 md:hidden"
-            onClick={() => setIsMobileOpen(false)}
-          />
-          <aside className="fixed left-0 top-0 h-full w-64 z-50 bg-background border-r border-border/20 md:hidden">
-            <SidebarContent />
-          </aside>
-        </>
-      )}
     </>
   );
 }

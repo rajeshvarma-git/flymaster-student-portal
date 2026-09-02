@@ -1,35 +1,32 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.b485f415001e400581b9273bffe4427a',
-  appName: 'flymasters-hybrid-application',
+  appId: 'in.flymasters.app',
+  appName: 'Fly Masters',
   webDir: 'dist',
-  server: {
-    url: 'https://b485f415-001e-4005-81b9-273bffe4427a.lovableproject.com?forceHideBadge=true',
-    cleartext: true
-  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#ffffff',
+      backgroundColor: '#EEF2FF',
       androidSplashResourceName: 'splash',
       androidScaleType: 'CENTER_CROP',
-      showSpinner: false,
-      androidSpinnerStyle: 'large',
-      iosSpinnerStyle: 'small',
+      showSpinner: true,
       spinnerColor: '#4F46E5',
       splashFullScreen: true,
       splashImmersive: true,
     },
     StatusBar: {
-      style: 'LIGHT_CONTENT',
+      style: 'LIGHT',
       backgroundColor: '#4F46E5',
     },
     Keyboard: {
       resize: 'body',
       resizeOnFullScreen: true,
-    }
-  }
+    },
+  },
+  android: {
+    allowMixedContent: true,
+  },
 };
 
 export default config;

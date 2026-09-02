@@ -2,13 +2,14 @@ import React, { useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AuthProvider } from "@/hooks/useAuth";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
-import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { MobileHeader } from "@/components/MobileHeader";
+import { MobileAssistiveTouch } from "@/components/mobile/MobileAssistiveTouch";
+import { isPortalRoute } from "@/hooks/useRouteContext";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Chat from "./pages/Chat";
@@ -22,6 +23,20 @@ import { AdminSection } from "./components/dashboard/sections/AdminSection";
 import { CounselorLayout } from "./counselor/layout/CounselorLayout";
 
 const queryClient = new QueryClient();
+
+function MobileShell({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const showPublicMobile = !isPortalRoute(location.pathname) && location.pathname !== '/auth';
+
+  return (
+    <>
+      {showPublicMobile && <MobileHeader />}
+      <main className={`w-full ${showPublicMobile ? 'pt-14 md:pt-0' : ''}`}>
+        {children}
+      </main>
+    </>
+  );
+}
 
 const App = () => {
   useEffect(() => {
@@ -63,8 +78,7 @@ const App = () => {
               <Toaster />
               <Sonner />
               <OfflineIndicator />
-              <MobileHeader />
-              <main className="w-full pb-20 pt-0 md:pb-0 md:pt-0">
+              <MobileShell>
                 <Routes>
                   <Route path="/" element={<Index />} />
                   <Route path="/chat" element={<Chat />} />
@@ -79,8 +93,8 @@ const App = () => {
                   <Route path="/auth" element={<Auth />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
-              </main>
-              <MobileBottomNav />
+              </MobileShell>
+              <MobileAssistiveTouch />
               <PWAInstallPrompt />
             </div>
           </AuthProvider>

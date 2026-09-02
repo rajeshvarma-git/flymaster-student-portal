@@ -1,3 +1,5 @@
+import { apiUrl } from '@/lib/apiBase';
+
 export type Json =
   | string
   | number
@@ -98,7 +100,7 @@ async function loadAuth() {
   const local = readBrowserSession();
   if (!local?.access_token) return { session: null };
   try {
-    const payload = await fetchJson(`/__auth?token=${encodeURIComponent(local.access_token)}`);
+    const payload = await fetchJson(`${apiUrl('/__auth')}?token=${encodeURIComponent(local.access_token)}`);
     if (payload.session?.user) {
       writeBrowserSession(payload.session);
       return { session: payload.session as Session };
@@ -136,7 +138,7 @@ function writeBrowserSession(session: Session | null) {
 }
 
 async function loadTable(table: string) {
-  const payload = await fetchJson(`/__local_db?table=${encodeURIComponent(table)}`);
+  const payload = await fetchJson(`${apiUrl('/__local_db')}?table=${encodeURIComponent(table)}`);
   return Array.isArray(payload.rows) ? payload.rows : [];
 }
 
@@ -146,11 +148,11 @@ async function saveSession(session: Session | null) {
 }
 
 async function loadDb() {
-  return fetchJson("/__local_db");
+  return fetchJson(apiUrl("/__local_db"));
 }
 
 async function saveDb(db: any) {
-  const res = await fetch("/__local_db", {
+  const res = await fetch(apiUrl("/__local_db"), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(db),
@@ -164,7 +166,7 @@ async function saveDb(db: any) {
 
 async function mutateDb(body: Record<string, any>) {
   const payload = await fetchJson(
-    "/__local_db",
+    apiUrl("/__local_db"),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -439,7 +441,7 @@ export const supabase = {
     },
     async signInWithPassword({ email, password }: { email: string; password: string }) {
       try {
-        const payload = await fetchJson("/__auth", {
+        const payload = await fetchJson(apiUrl("/__auth"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "signin", email: String(email || "").trim(), password }),
@@ -462,7 +464,7 @@ export const supabase = {
       options?: { data?: Record<string, any>; emailRedirectTo?: string };
     }) {
       try {
-        const payload = await fetchJson("/__auth", {
+        const payload = await fetchJson(apiUrl("/__auth"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -483,7 +485,7 @@ export const supabase = {
     async signOut(_options?: { scope?: string }) {
       const local = readBrowserSession();
       try {
-        await fetchJson("/__auth", {
+        await fetchJson(apiUrl("/__auth"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "signout", token: local?.access_token }),
@@ -501,7 +503,7 @@ export const supabase = {
     async updateUser({ password }: { password?: string }) {
       const local = readBrowserSession();
       if (local?.access_token && password) {
-        await fetchJson("/__auth", {
+        await fetchJson(apiUrl("/__auth"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "password", token: local.access_token, password }),
@@ -532,7 +534,7 @@ export const supabase = {
       return {
         async upload(filePath: string, file: File | Blob) {
           const dataUrl = await fileToDataUrl(file);
-          await fetchJson("/__storage", {
+          await fetchJson(apiUrl("/__storage"), {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ path: filePath, dataUrl }),
@@ -541,7 +543,7 @@ export const supabase = {
         },
         async download(filePath: string) {
           try {
-            const payload = await fetchJson(`/__storage?path=${encodeURIComponent(filePath)}`, undefined, 30000);
+            const payload = await fetchJson(`${apiUrl('/__storage')}?path=${encodeURIComponent(filePath)}`, undefined, 30000);
             if (!payload.dataUrl) return { data: null, error: { message: "File not found" } };
             return { data: dataUrlToBlob(payload.dataUrl), error: null };
           } catch (error: any) {
@@ -549,7 +551,7 @@ export const supabase = {
           }
         },
         async remove(paths: string[]) {
-          await fetchJson("/__storage", {
+          await fetchJson(apiUrl("/__storage"), {
             method: "DELETE",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ paths }),

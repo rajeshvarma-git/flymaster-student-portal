@@ -517,28 +517,33 @@ export function StudentDocuments() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center">
+    <div className="space-y-4 md:space-y-6 min-w-0 max-w-full">
+      {/* Header — desktop only; mobile uses MobilePortalHeader */}
+      <div className="hidden md:flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center shrink-0">
           <FileText className="w-5 h-5 text-white" />
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">My Documents</h1>
           <p className="text-muted-foreground">Upload and manage your application documents</p>
         </div>
       </div>
+      <p className="text-sm text-muted-foreground md:hidden">
+        Upload and manage your application documents
+      </p>
 
       {/* Progress Overview */}
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5" />
+      <Card className="glass-card overflow-hidden">
+        <CardHeader className="p-4 md:p-6">
+          <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+            <CheckCircle className="w-5 h-5 shrink-0" />
             Document Progress
           </CardTitle>
-          <CardDescription>Upload each file, then your counselor reviews it and marks it approved or rejected.</CardDescription>
+          <CardDescription className="text-xs md:text-sm">
+            Upload each file, then your counselor reviews it and marks it approved or rejected.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-4 pt-0 md:p-6 md:pt-0">
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Overall Progress</span>
@@ -546,8 +551,8 @@ export function StudentDocuments() {
             </div>
             <Progress value={completionPercentage} className="h-2" />
           </div>
-          
-          <div className="grid grid-cols-4 gap-4 text-center">
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 text-center">
             <div>
               <div className="text-2xl font-bold text-primary">{totalRequired || documents.length}</div>
               <div className="text-xs text-muted-foreground">Required</div>
@@ -570,52 +575,55 @@ export function StudentDocuments() {
 
       {/* Additional Document Requests */}
       {requests.length > 0 && (
-        <Card className="glass-card border-warning/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-warning">
-              <AlertTriangle className="w-5 h-5" />
+        <Card className="glass-card border-warning/50 overflow-hidden">
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle className="flex items-center gap-2 text-warning text-base md:text-lg">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
               Additional Documents Requested
             </CardTitle>
-            <CardDescription>Your counselor has requested these additional documents</CardDescription>
+            <CardDescription className="text-xs md:text-sm">Your counselor has requested these additional documents</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 p-4 pt-0 md:p-6 md:pt-0">
             {requests.map((request) => {
               const uploadedDoc = documents.find(doc => doc.request_id === request.id);
-              
+
               return (
-                <div key={request.id} className="flex items-center justify-between p-4 border border-warning/20 rounded-lg bg-warning/5">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium">{request.document_type}</h4>
+                <div
+                  key={request.id}
+                  className="flex flex-col gap-3 p-3 md:p-4 border border-warning/20 rounded-lg bg-warning/5 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-medium text-sm md:text-base break-words">{request.document_type}</h4>
                       {request.is_mandatory && (
-                        <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/20">
+                        <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/20 shrink-0">
                           Required
                         </Badge>
                       )}
                       {uploadedDoc && getStatusIcon(uploadedDoc.status)}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">{request.description}</p>
-                    
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
+                    <p className="text-xs md:text-sm text-muted-foreground mt-1 break-words">{request.description}</p>
+
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 text-xs text-muted-foreground mt-2">
                       <span>Max size: {request.max_file_size_mb}MB</span>
                       <span>Types: {request.allowed_file_types.join(', ')}</span>
                     </div>
 
                     {uploadedDoc && (
-                      <div className="mt-3">
+                      <div className="mt-3 space-y-2">
                         {getStatusBadge(uploadedDoc.status)}
                         {uploadedDoc.admin_comments && (
-                          <div className="mt-2 p-2 bg-muted/30 rounded text-sm">
+                          <div className="p-2 bg-muted/30 rounded text-xs md:text-sm break-words">
                             <strong>Counselor Note:</strong> {uploadedDoc.admin_comments}
                           </div>
                         )}
                       </div>
                     )}
                   </div>
-                  
-                  <div className="ml-4">
+
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:shrink-0">
                     {!uploadedDoc || uploadedDoc.status === 'rejected' ? (
-                      <div className="relative">
+                      <div className="relative w-full sm:w-auto">
                         <input
                           type="file"
                           id={`request-${request.id}`}
@@ -627,18 +635,17 @@ export function StudentDocuments() {
                         <Button
                           size="sm"
                           disabled={uploading === request.document_type}
-                          className="bg-primary hover:bg-primary/90"
+                          className="w-full sm:w-auto bg-primary hover:bg-primary/90"
                         >
                           <Upload className="w-4 h-4 mr-2" />
                           {uploading === request.document_type ? 'Uploading...' : uploadedDoc ? 'Re-upload' : 'Upload'}
                         </Button>
                       </div>
                     ) : (
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => downloadFile(uploadedDoc)}>
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => downloadFile(uploadedDoc)}>
+                        <Download className="w-4 h-4 mr-2" />
+                        Download
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -650,54 +657,59 @@ export function StudentDocuments() {
 
       {/* Required Documents Checklist */}
       {checklist.length > 0 && (
-        <Card className="glass-card">
-          <CardHeader>
-            <CardTitle>Required Documents</CardTitle>
-            <CardDescription>Upload the matching document for each item. A resume cannot be submitted as Original Degree (OD).</CardDescription>
+        <Card className="glass-card overflow-hidden">
+          <CardHeader className="p-4 md:p-6">
+            <CardTitle className="text-base md:text-lg">Required Documents</CardTitle>
+            <CardDescription className="text-xs md:text-sm">
+              Upload the matching document for each item. A resume cannot be submitted as Original Degree (OD).
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 p-4 pt-0 md:p-6 md:pt-0">
             {checklist.map((item) => {
               const uploadedDoc = getUploadedDocument(item.document_type);
               const isUploaded = !!uploadedDoc;
-              
+
               return (
-                <div key={item.id} className="flex items-center justify-between p-4 border border-border/20 rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium">{item.document_type}</h4>
+                <div
+                  key={item.id}
+                  className="flex flex-col gap-3 p-3 md:p-4 border border-border/20 rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-medium text-sm md:text-base break-words">{item.document_type}</h4>
                       {item.is_required && (
-                        <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/20">
+                        <Badge variant="outline" className="text-xs bg-destructive/10 text-destructive border-destructive/20 shrink-0">
                           Required
                         </Badge>
                       )}
                       {isUploaded && getStatusIcon(uploadedDoc.status)}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
-                    
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
+                    <p className="text-xs md:text-sm text-muted-foreground mt-1 break-words">{item.description}</p>
+
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-4 text-xs text-muted-foreground mt-2">
                       <span>Max size: {item.max_file_size_mb}MB</span>
                       <span>Types: {item.allowed_file_types.join(', ')}</span>
                     </div>
-                    
+
                     {uploadedDoc && (
                       <div className="flex flex-col gap-2 mt-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {getStatusBadge(uploadedDoc.status)}
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground break-all">
                             {uploadedDoc.file_name}
                           </span>
                         </div>
                         {uploadedDoc.admin_comments && (
                           <div className="flex items-start gap-2 p-2 bg-muted/30 rounded-md">
-                            <AlertCircle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
-                            <span className="text-xs text-muted-foreground">
+                            <AlertCircle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                            <span className="text-xs text-muted-foreground break-words">
                               <strong>Counselor Note:</strong> {uploadedDoc.admin_comments}
                             </span>
                           </div>
                         )}
                       </div>
                     )}
-                    
+
                     {uploading === item.document_type && uploadProgress[item.document_type] !== undefined && (
                       <div className="mt-3">
                         <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
@@ -708,29 +720,31 @@ export function StudentDocuments() {
                       </div>
                     )}
                   </div>
-                  
-                  <div className="flex items-center gap-2 ml-4">
+
+                  <div className="flex flex-col gap-2 w-full sm:w-auto sm:shrink-0">
                     {isUploaded && uploadedDoc.status !== 'rejected' && (
-                      <>
+                      <div className="flex gap-2 w-full sm:w-auto">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => downloadFile(uploadedDoc)}
-                          className="hover:bg-primary/10"
+                          className="flex-1 sm:flex-none hover:bg-primary/10"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-4 h-4 sm:mr-0 mr-2" />
+                          <span className="sm:hidden">Download</span>
                         </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => deleteDocument(uploadedDoc)}
-                          className="hover:bg-destructive/10 hover:text-destructive"
+                          className="flex-1 sm:flex-none hover:bg-destructive/10 hover:text-destructive"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4 sm:mr-0 mr-2" />
+                          <span className="sm:hidden">Delete</span>
                         </Button>
-                      </>
+                      </div>
                     )}
-                    <div className="relative">
+                    <div className="relative w-full sm:w-auto">
                       <input
                         type="file"
                         id={`file-${item.document_type}`}
@@ -742,7 +756,7 @@ export function StudentDocuments() {
                       <Button
                         size="sm"
                         disabled={uploading === item.document_type}
-                        className="bg-primary hover:bg-primary/90"
+                        className="w-full sm:w-auto bg-primary hover:bg-primary/90"
                       >
                         <Upload className="w-4 h-4 mr-2" />
                         {uploading === item.document_type

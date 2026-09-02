@@ -9,12 +9,9 @@ import {
   Bell,
   BookOpen,
   LogOut,
-  Menu,
-  X,
   Heart,
   List,
   FileText,
-  Target,
   Search,
   Command
 } from 'lucide-react';
@@ -83,7 +80,6 @@ const studentNavItems: StudentNavItem[] = [
 export function StudentSidebar() {
   const { user, signOut } = useAuth();
   const location = useLocation();
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -179,7 +175,6 @@ export function StudentSidebar() {
                     : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 }`
               }
-              onClick={() => setIsMobileOpen(false)}
             >
               <item.icon className="w-4 h-4 flex-shrink-0" />
               <span className="flex-1">{item.title}</span>
@@ -238,33 +233,10 @@ export function StudentSidebar() {
         userId={user?.id}
       />
       
-      {/* Mobile Menu Button */}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="fixed top-4 left-4 z-50 md:hidden"
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-      >
-        {isMobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </Button>
-
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar only — mobile uses bottom tab bar */}
       <aside className="hidden md:flex w-64 flex-col bg-background/95 backdrop-blur-sm border-r border-border/20">
         <SidebarContent />
       </aside>
-
-      {/* Mobile Sidebar Overlay */}
-      {isMobileOpen && (
-        <>
-          <div 
-            className="fixed inset-0 bg-black/50 z-40 md:hidden"
-            onClick={() => setIsMobileOpen(false)}
-          />
-          <aside className="fixed left-0 top-0 h-full w-64 z-50 bg-background border-r border-border/20 md:hidden">
-            <SidebarContent />
-          </aside>
-        </>
-      )}
     </>
   );
 }
