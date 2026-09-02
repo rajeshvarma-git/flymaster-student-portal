@@ -7,7 +7,9 @@ import {
   getActiveSteps,
   buildWelcomeMessage,
   type ChatStep,
+  type ChatContext,
 } from '@/lib/chatContext';
+import { saveChatDataToProfile } from '@/lib/syncChatProfile';
 import { useAuth } from '@/hooks/useAuth';
 import type { UniversityRecommendation } from '@/lib/universityRecommendations';
 
@@ -71,7 +73,11 @@ export const useChat = () => {
     setState((prev) => ({ ...prev, messages: [...prev.messages, newMessage] }));
   }, []);
 
-  const persistSession = useCallback(async (conversationData: Record<string, any>, stage: number) => {
+  const persistSession = useCallback(async (
+    conversationData: Record<string, any>,
+    stage: number,
+    completed = false
+  ) => {
     const sessionId = sessionIdRef.current;
     if (!sessionId) return;
 
@@ -80,11 +86,27 @@ export const useChat = () => {
         conversation_data: conversationData,
         current_stage: stage,
         user_id: user?.id ?? null,
+        is_completed: completed,
+        updated_at: new Date().toISOString(),
       }).eq('id', sessionId);
     } catch (error) {
       console.warn('Chat session update skipped:', error);
     }
-  }, [user?.id]);
+
+    if (!user?.id) return;
+
+    try {
+      await saveChatDataToProfile(
+        user.id,
+        user.email,
+        conversationData as ChatContext,
+        userProfile,
+        sessionId
+      );
+    } catch (error) {
+      console.warn('Profile sync from chat skipped:', error);
+    }
+  }, [user?.id, user?.email, userProfile]);
 
   const fetchUniversities = useCallback(async (conversationData: Record<string, any>) => {
     try {
@@ -111,7 +133,12 @@ export const useChat = () => {
         });
       }
 
-      await persistSession(conversationData, activeStepsRef.current.length + 1);
+      addMessage({
+        type: 'ai',
+        content: '✅ Your chat answers have been saved to your student profile.',
+      });
+
+      await persistSession(conversationData, activeStepsRef.current.length + 1, true);
     } catch (error) {
       console.error('Error fetching universities:', error);
       setState((prev) => ({ ...prev, showExpertHelp: true, isLoading: false, chatComplete: true }));
