@@ -29,6 +29,36 @@ export function inboxActionUrl(raw: string, fallback?: string | null) {
   return "/student/documents";
 }
 
+function inboxFingerprint(item: Pick<StudentInboxItem, "title" | "message" | "created_at">) {
+  const minute = item.created_at?.slice(0, 16) ?? "";
+  return `${item.title.trim().toLowerCase()}|${item.message.trim().toLowerCase()}|${minute}`;
+}
+
+function dedupeInboxItems(items: StudentInboxItem[]): StudentInboxItem[] {
+  const byFingerprint = new Map<string, StudentInboxItem>();
+
+  for (const item of items) {
+    const fp = inboxFingerprint(item);
+    const existing = byFingerprint.get(fp);
+    if (!existing) {
+      byFingerprint.set(fp, item);
+      continue;
+    }
+
+    const preferred =
+      item.source === "notifications" && existing.source !== "notifications" ? item : existing;
+    const other = preferred === item ? existing : item;
+    byFingerprint.set(fp, {
+      ...preferred,
+      is_read: Boolean(preferred.is_read && other.is_read),
+    });
+  }
+
+  return [...byFingerprint.values()].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
 export async function notifyStudent(input: {
   userId: string;
   title: string;
@@ -41,41 +71,30 @@ export async function notifyStudent(input: {
   const now = new Date().toISOString();
   const type = input.type || "info";
   const actionUrl = input.actionUrl || inboxActionUrl(type);
-  const payload = {
+
+  await supabase.from("notifications").insert({
     id,
     user_id: input.userId,
     title: input.title,
     message: input.message,
     type,
-    notification_type: type,
     action_url: actionUrl,
     is_read: false,
     created_at: now,
-    document_id: input.documentId || null,
-  };
-
-  await supabase.from("notifications").insert({
-    id: payload.id,
-    user_id: payload.user_id,
-    title: payload.title,
-    message: payload.message,
-    type: payload.type,
-    action_url: payload.action_url,
-    is_read: false,
-    created_at: payload.created_at,
   });
 
-  await supabase.from("document_notifications").insert({
-    id: payload.id,
-    user_id: payload.user_id,
-    title: payload.title,
-    message: payload.message,
-    notification_type: payload.notification_type,
-    action_url: payload.action_url,
-    is_read: false,
-    created_at: payload.created_at,
-    document_id: payload.document_id,
-  });
+  if (input.documentId) {
+    await supabase.from("document_notifications").insert({
+      id,
+      user_id: input.userId,
+      title: input.title,
+      message: input.message,
+      notification_type: type,
+      is_read: false,
+      created_at: now,
+      document_id: input.documentId,
+    });
+  }
 
   return id;
 }
@@ -115,9 +134,7 @@ export async function loadStudentInbox(userId: string): Promise<StudentInboxItem
     });
   }
 
-  return [...merged.values()].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
+  return dedupeInboxItems([...merged.values()]);
 }
 
 export async function markInboxRead(ids: string[]) {
