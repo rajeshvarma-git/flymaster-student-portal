@@ -1,6 +1,5 @@
-const CACHE_NAME = 'flymasters-v1.1.1';
-const urlsToCache = [
-  '/',
+const CACHE_NAME = 'flymasters-v1.2.0';
+const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -10,10 +9,20 @@ const urlsToCache = [
   '/favicon-48.png',
 ];
 
+function shouldBypassCache(pathname) {
+  return (
+    pathname.startsWith('/__') ||
+    pathname.startsWith('/assets/') ||
+    pathname === '/sw.js' ||
+    pathname.endsWith('.html') ||
+    pathname === '/'
+  );
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
+      .then((cache) => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
       .catch((err) => {
         console.log('Service Worker: Error caching files', err);
@@ -43,13 +52,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   const path = new URL(event.request.url).pathname;
-  if (path.startsWith('/__')) {
+  if (shouldBypassCache(path)) {
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((fetchResponse) => {
+    fetch(event.request)
+      .then((fetchResponse) => {
         if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
           return fetchResponse;
         }
@@ -60,12 +69,8 @@ self.addEventListener('fetch', (event) => {
         });
 
         return fetchResponse;
-      }).catch(() => {
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
-      });
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
 

@@ -10,6 +10,7 @@ import {
   writeAppState,
   writeStorageFile,
 } from "./postgres";
+import { isEmailConfigured } from "./emailVerification";
 import {
   destroySession,
   getSessionByToken,
@@ -105,6 +106,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       sendJson(res, 200, {
         ok: true,
         ...info,
+        emailConfigured: isEmailConfigured(),
         documentChecklists: (state.tables.document_checklists || []).length,
       });
       return;

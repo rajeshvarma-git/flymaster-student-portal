@@ -37,7 +37,13 @@ function getMailer() {
 }
 
 function mailNotConfiguredMessage() {
-  return "Email service is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in .env, then restart the server.";
+  return "Email service is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in Railway (or .env locally), then redeploy.";
+}
+
+export function isEmailConfigured() {
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const pass = String(process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || "").replace(/\s+/g, "");
+  return Boolean(user && pass);
 }
 
 async function ensureVerificationTable() {

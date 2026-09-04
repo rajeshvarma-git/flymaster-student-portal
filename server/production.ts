@@ -45,8 +45,14 @@ async function serveStatic(req: import("http").IncomingMessage, res: import("htt
 
   if (existsSync(filePath)) {
     const data = await readFile(filePath);
+    const ext = extname(filePath).toLowerCase();
     res.statusCode = 200;
-    res.setHeader("Content-Type", MIME[extname(filePath).toLowerCase()] || "application/octet-stream");
+    res.setHeader("Content-Type", MIME[ext] || "application/octet-stream");
+    if (relativePath.startsWith("/assets/")) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (relativePath === "/sw.js" || relativePath === "/index.html") {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    }
     res.end(data);
     return;
   }
@@ -55,6 +61,7 @@ async function serveStatic(req: import("http").IncomingMessage, res: import("htt
   const indexHtml = await readFile(indexPath);
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.end(indexHtml);
 }
 
