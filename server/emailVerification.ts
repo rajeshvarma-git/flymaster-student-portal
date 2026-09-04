@@ -1,5 +1,6 @@
 import { createHash, randomInt } from "crypto";
 import nodemailer from "nodemailer";
+import type Transporter from "nodemailer/lib/mailer";
 import { ensureSchema, getPool } from "./postgres";
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -10,6 +11,13 @@ function normalizeEmail(value: string) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeSecret(value: string) {
+  return String(value || "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .replace(/\s+/g, "");
+}
+
 function hashCode(email: string, code: string) {
   return createHash("sha256").update(`${normalizeEmail(email)}:${code}`).digest("hex");
 }
@@ -18,32 +26,83 @@ function generateCode() {
   return String(randomInt(100000, 999999));
 }
 
-function getMailer() {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
-  const pass = String(process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || "").replace(/\s+/g, "");
+function getEmailCredentials() {
+  const user = normalizeEmail(process.env.GMAIL_USER || process.env.SMTP_USER || "");
+  const pass = normalizeSecret(process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || "");
+  return { user, pass };
+}
+
+function getMailer(): Transporter | null {
+  const { user, pass } = getEmailCredentials();
   if (!user || !pass) return null;
 
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const host = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
   const port = Number(process.env.SMTP_PORT || 587);
   const secure = process.env.SMTP_SECURE === "true" || port === 465;
+  const usingDefaultGmail = host === "smtp.gmail.com" && !process.env.SMTP_HOST;
+
+  if (usingDefaultGmail) {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: { user, pass },
+      connectionTimeout: 20_000,
+      greetingTimeout: 20_000,
+      socketTimeout: 30_000,
+    });
+  }
 
   return nodemailer.createTransport({
     host,
     port,
     secure,
     auth: { user, pass },
+    requireTLS: !secure,
     tls: { minVersion: "TLSv1.2" },
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 30_000,
   });
 }
 
 function mailNotConfiguredMessage() {
-  return "Email service is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in Railway (or .env locally), then redeploy.";
+  return "Email service is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in Railway, then redeploy.";
 }
 
 export function isEmailConfigured() {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
-  const pass = String(process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || "").replace(/\s+/g, "");
+  const { user, pass } = getEmailCredentials();
   return Boolean(user && pass);
+}
+
+function classifySmtpError(error: any) {
+  const message = String(error?.message || "");
+  const response = String(error?.response || "");
+  const combined = `${message} ${response}`.toLowerCase();
+
+  if (/invalid login|authentication failed|username and password not accepted|535|534-5\.7\.9|eauth/i.test(combined)) {
+    return "Gmail rejected the login. Use a Google App Password (not your normal password) and set GMAIL_USER + GMAIL_APP_PASSWORD in Railway.";
+  }
+  if (/daily user sending quota|550-5\.4\.5|too many emails/i.test(combined)) {
+    return "Gmail daily sending limit reached. Try again tomorrow or use a different sender account.";
+  }
+  if (/timeout|timed out|etimedout|econnrefused|enotfound|connect/i.test(combined)) {
+    return "Could not connect to Gmail SMTP from the server. Check Railway variables and try SMTP_PORT=465 with SMTP_SECURE=true.";
+  }
+  return "Could not send verification email. Confirm GMAIL_USER and GMAIL_APP_PASSWORD in Railway, then redeploy.";
+}
+
+export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: string }> {
+  const mailer = getMailer();
+  if (!mailer) {
+    return { ok: false, error: "Gmail credentials are missing." };
+  }
+
+  try {
+    await mailer.verify();
+    return { ok: true };
+  } catch (error: any) {
+    console.error("SMTP verification failed:", error);
+    return { ok: false, error: classifySmtpError(error) };
+  }
 }
 
 async function ensureVerificationTable() {
@@ -58,6 +117,20 @@ async function ensureVerificationTable() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+}
+
+async function storeVerificationCode(email: string, code: string) {
+  const expiresAt = new Date(Date.now() + CODE_TTL_MS).toISOString();
+  await getPool().query(
+    `INSERT INTO auth_signup_verifications (email, code_hash, expires_at, attempts, last_sent_at)
+     VALUES ($1, $2, $3, 0, now())
+     ON CONFLICT (email) DO UPDATE SET
+       code_hash = EXCLUDED.code_hash,
+       expires_at = EXCLUDED.expires_at,
+       attempts = 0,
+       last_sent_at = now()`,
+    [email, hashCode(email, code), expiresAt]
+  );
 }
 
 export async function sendSignupVerificationCode(
@@ -98,27 +171,16 @@ export async function sendSignupVerificationCode(
     return { ok: false, error: `Please wait ${waitSec}s before requesting another code.`, status: 429, retryAfterSeconds: waitSec };
   }
 
-  const code = generateCode();
-  const expiresAt = new Date(Date.now() + CODE_TTL_MS).toISOString();
-  await getPool().query(
-    `INSERT INTO auth_signup_verifications (email, code_hash, expires_at, attempts, last_sent_at)
-     VALUES ($1, $2, $3, 0, now())
-     ON CONFLICT (email) DO UPDATE SET
-       code_hash = EXCLUDED.code_hash,
-       expires_at = EXCLUDED.expires_at,
-       attempts = 0,
-       last_sent_at = now()`,
-    [email, hashCode(email, code), expiresAt]
-  );
-
   const mailer = getMailer();
   const fromName = process.env.GMAIL_FROM_NAME || "Fly AI Pathfinder";
-  const fromAddress = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const fromAddress = getEmailCredentials().user;
 
   if (!mailer || !fromAddress) {
     console.error("Verification email skipped: Gmail SMTP is not configured.");
     return { ok: false, error: mailNotConfiguredMessage(), status: 503 };
   }
+
+  const code = generateCode();
 
   try {
     await mailer.sendMail({
@@ -138,17 +200,10 @@ export async function sendSignupVerificationCode(
     console.log(`Verification email sent to ${email}`);
   } catch (error: any) {
     console.error("Failed to send verification email:", error);
-    const smtpMessage = String(error?.response || error?.message || "");
-    if (/invalid login|authentication failed|username and password not accepted/i.test(smtpMessage)) {
-      return {
-        ok: false,
-        error: "Gmail rejected the app password. Create a new App Password in Google Account settings and update GMAIL_APP_PASSWORD in .env.",
-        status: 503,
-      };
-    }
-    return { ok: false, error: "Could not send verification email. Check Gmail settings and try again.", status: 503 };
+    return { ok: false, error: classifySmtpError(error), status: 503 };
   }
 
+  await storeVerificationCode(email, code);
   return { ok: true };
 }
 

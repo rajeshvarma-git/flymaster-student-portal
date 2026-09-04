@@ -10,7 +10,7 @@ import {
   writeAppState,
   writeStorageFile,
 } from "./postgres";
-import { isEmailConfigured } from "./emailVerification";
+import { isEmailConfigured, verifySmtpConnection } from "./emailVerification";
 import {
   destroySession,
   getSessionByToken,
@@ -103,10 +103,14 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       await ensureSchema();
       const info = await pingPostgres();
       const state = await readAppState({ table: "document_checklists" });
+      const emailConfigured = isEmailConfigured();
+      const smtp = emailConfigured ? await verifySmtpConnection() : { ok: false, error: "Gmail credentials are missing." };
       sendJson(res, 200, {
         ok: true,
         ...info,
-        emailConfigured: isEmailConfigured(),
+        emailConfigured,
+        smtpOk: smtp.ok,
+        smtpError: smtp.ok ? undefined : smtp.error,
         documentChecklists: (state.tables.document_checklists || []).length,
       });
       return;
