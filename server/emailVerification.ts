@@ -32,36 +32,84 @@ function getEmailCredentials() {
   return { user, pass };
 }
 
-function getMailer(): Transporter | null {
+function getGmailTransportOptions(): Array<{
+  label: string;
+  options: nodemailer.TransportOptions;
+}> {
   const { user, pass } = getEmailCredentials();
-  if (!user || !pass) return null;
-
   const host = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
-  const port = Number(process.env.SMTP_PORT || 587);
-  const secure = process.env.SMTP_SECURE === "true" || port === 465;
-  const usingDefaultGmail = host === "smtp.gmail.com" && !process.env.SMTP_HOST;
+  const configuredPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : null;
+  const configuredSecure = process.env.SMTP_SECURE === "true";
 
-  if (usingDefaultGmail) {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: { user, pass },
-      connectionTimeout: 20_000,
-      greetingTimeout: 20_000,
-      socketTimeout: 30_000,
-    });
+  if (process.env.SMTP_HOST || configuredPort) {
+    const port = configuredPort || 465;
+    return [{
+      label: `custom:${host}:${port}`,
+      options: {
+        host,
+        port,
+        secure: configuredSecure || port === 465,
+        auth: { user, pass },
+        requireTLS: !(configuredSecure || port === 465),
+        tls: { minVersion: "TLSv1.2" },
+        connectionTimeout: 20_000,
+        greetingTimeout: 20_000,
+        socketTimeout: 30_000,
+      },
+    }];
   }
 
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
-    requireTLS: !secure,
-    tls: { minVersion: "TLSv1.2" },
-    connectionTimeout: 20_000,
-    greetingTimeout: 20_000,
-    socketTimeout: 30_000,
-  });
+  // Railway and many cloud hosts block outbound 587; prefer 465 first.
+  return [
+    {
+      label: "gmail:465",
+      options: {
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
+        auth: { user, pass },
+        tls: { minVersion: "TLSv1.2" },
+        connectionTimeout: 20_000,
+        greetingTimeout: 20_000,
+        socketTimeout: 30_000,
+      },
+    },
+    {
+      label: "gmail:587",
+      options: {
+        host: "smtp.gmail.com",
+        port: 587,
+        secure: false,
+        auth: { user, pass },
+        requireTLS: true,
+        tls: { minVersion: "TLSv1.2" },
+        connectionTimeout: 20_000,
+        greetingTimeout: 20_000,
+        socketTimeout: 30_000,
+      },
+    },
+  ];
+}
+
+function createMailer(options: nodemailer.TransportOptions): Transporter {
+  return nodemailer.createTransport(options);
+}
+
+async function withMailer<T>(fn: (mailer: Transporter) => Promise<T>): Promise<T> {
+  const transports = getGmailTransportOptions();
+  let lastError: any = null;
+
+  for (const transport of transports) {
+    const mailer = createMailer(transport.options);
+    try {
+      return await fn(mailer);
+    } catch (error) {
+      lastError = error;
+      console.error(`SMTP attempt failed (${transport.label}):`, error);
+    }
+  }
+
+  throw lastError || new Error("Could not connect to Gmail SMTP.");
 }
 
 function mailNotConfiguredMessage() {
@@ -91,13 +139,15 @@ function classifySmtpError(error: any) {
 }
 
 export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: string }> {
-  const mailer = getMailer();
-  if (!mailer) {
+  const { user, pass } = getEmailCredentials();
+  if (!user || !pass) {
     return { ok: false, error: "Gmail credentials are missing." };
   }
 
   try {
-    await mailer.verify();
+    await withMailer(async (mailer) => {
+      await mailer.verify();
+    });
     return { ok: true };
   } catch (error: any) {
     console.error("SMTP verification failed:", error);
@@ -171,11 +221,11 @@ export async function sendSignupVerificationCode(
     return { ok: false, error: `Please wait ${waitSec}s before requesting another code.`, status: 429, retryAfterSeconds: waitSec };
   }
 
-  const mailer = getMailer();
+  const mailerConfigured = getEmailCredentials();
   const fromName = process.env.GMAIL_FROM_NAME || "Fly AI Pathfinder";
-  const fromAddress = getEmailCredentials().user;
+  const fromAddress = mailerConfigured.user;
 
-  if (!mailer || !fromAddress) {
+  if (!fromAddress || !mailerConfigured.pass) {
     console.error("Verification email skipped: Gmail SMTP is not configured.");
     return { ok: false, error: mailNotConfiguredMessage(), status: 503 };
   }
@@ -183,12 +233,13 @@ export async function sendSignupVerificationCode(
   const code = generateCode();
 
   try {
-    await mailer.sendMail({
-      from: `"${fromName}" <${fromAddress}>`,
-      to: email,
-      subject: "Your Fly AI Pathfinder verification code",
-      text: `Your verification code is ${code}. It expires in 10 minutes.`,
-      html: `
+    await withMailer(async (mailer) => {
+      await mailer.sendMail({
+        from: `"${fromName}" <${fromAddress}>`,
+        to: email,
+        subject: "Your Fly AI Pathfinder verification code",
+        text: `Your verification code is ${code}. It expires in 10 minutes.`,
+        html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
           <h2 style="color:#1e40af;margin-bottom:8px">Verify your email</h2>
           <p style="color:#475569;margin-top:0">Use this code to finish creating your Fly AI Pathfinder account:</p>
@@ -196,6 +247,7 @@ export async function sendSignupVerificationCode(
           <p style="color:#64748b;font-size:14px">This code expires in 10 minutes. If you did not request this, you can ignore this email.</p>
         </div>
       `,
+      });
     });
     console.log(`Verification email sent to ${email}`);
   } catch (error: any) {
