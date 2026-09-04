@@ -14,7 +14,8 @@ interface AuthContextType {
   loading: boolean;
   roleLoading: boolean;
   profileLoading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string, verificationCode: string) => Promise<{ error: any }>;
+  sendSignupVerificationCode: (email: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
@@ -34,6 +35,7 @@ const AuthContext = createContext<AuthContextType>({
   roleLoading: false,
   profileLoading: false,
   signUp: async () => ({ error: null }),
+  sendSignupVerificationCode: async () => ({ error: null }),
   signIn: async () => ({ error: null }),
   signOut: async () => {},
   resetPassword: async () => ({ error: null }),
@@ -186,20 +188,30 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
+  const signUp = async (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    verificationCode: string
+  ) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      verificationCode,
       options: {
-        emailRedirectTo: redirectUrl,
+        emailRedirectTo: `${window.location.origin}/`,
         data: {
           first_name: firstName,
           last_name: lastName,
-        }
-      }
+        },
+      },
     });
+    return { error };
+  };
+
+  const sendSignupVerificationCode = async (email: string) => {
+    const { error } = await supabase.auth.sendSignupVerificationCode(email);
     return { error };
   };
 
@@ -293,6 +305,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     roleLoading,
     profileLoading,
     signUp,
+    sendSignupVerificationCode,
     signIn,
     signOut,
     resetPassword,

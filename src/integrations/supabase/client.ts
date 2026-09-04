@@ -452,9 +452,11 @@ export const supabase = {
       email,
       password,
       options,
+      verificationCode,
     }: {
       email: string;
       password: string;
+      verificationCode?: string;
       options?: { data?: Record<string, any>; emailRedirectTo?: string };
     }) {
       try {
@@ -465,6 +467,7 @@ export const supabase = {
             action: "signup",
             email: String(email || "").trim(),
             password,
+            verificationCode,
             user_metadata: options?.data || {},
           }),
         });
@@ -477,6 +480,21 @@ export const supabase = {
         return { data: { user: session.user, session }, error: null };
       } catch (error: any) {
         return { data: { user: null, session: null }, error: { message: error.message || "Could not create account" } };
+      }
+    },
+    async sendSignupVerificationCode(email: string) {
+      try {
+        await fetchJson(apiUrl("/__auth"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "send-signup-code",
+            email: String(email || "").trim(),
+          }),
+        });
+        return { error: null, data: { ok: true } };
+      } catch (error: any) {
+        return { error: { message: error.message || "Could not send verification code" }, data: null };
       }
     },
     async signOut(_options?: { scope?: string }) {

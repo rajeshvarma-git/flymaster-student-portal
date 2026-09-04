@@ -1,6 +1,9 @@
 import { randomBytes } from "crypto";
 import { hashPassword, needsRehash, verifyPassword } from "./password";
 import { ensureSchema, getPool, mutateAppState } from "./postgres";
+import { clearSignupVerification, sendSignupVerificationCode, verifySignupCode } from "./emailVerification";
+
+export { sendSignupVerificationCode };
 
 const SESSION_DAYS = 30;
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -134,17 +137,25 @@ export async function signInUser(emailInput: string, password: string): Promise<
 export async function signUpUser(input: {
   email: string;
   password: string;
+  verificationCode?: string;
   user_metadata?: Record<string, any>;
 }): Promise<{ session?: AuthSession; error?: string; status?: number }> {
   await ensureSchema();
   const email = normalizeEmail(input.email);
   const password = String(input.password || "");
+  const verificationCode = String(input.verificationCode || "").trim();
   const firstName = String(input.user_metadata?.first_name || "").trim();
   const lastName = String(input.user_metadata?.last_name || "").trim();
   if (!email || !email.includes("@")) return { error: "Enter a valid email address.", status: 400 };
   if (password.length < 6) return { error: "Password must be at least 6 characters.", status: 400 };
+  if (!verificationCode) return { error: "Enter the verification code sent to your email.", status: 400 };
   if (!checkRateLimit(`signup:${email}`, 8)) {
     return { error: "Too many sign-up attempts. Try again in a few minutes.", status: 429 };
+  }
+
+  const verified = await verifySignupCode(email, verificationCode);
+  if (!verified.ok) {
+    return { error: verified.error, status: verified.status || 400 };
   }
 
   const existing = await getPool().query("SELECT id FROM auth_users WHERE lower(email) = $1 LIMIT 1", [email]);
@@ -214,6 +225,7 @@ export async function signUpUser(input: {
     }],
   });
 
+  await clearSignupVerification(email);
   return { session: await createSession(publicUser(user)) };
 }
 

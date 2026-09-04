@@ -5,6 +5,9 @@ import { extname, join } from "path";
 import { fileURLToPath } from "url";
 import { handleApiRequest, isApiPath } from "./httpApi";
 import { ensureSchema } from "./postgres";
+import { loadEnvFile } from "./loadEnv";
+
+loadEnvFile();
 
 const distDir = join(fileURLToPath(new URL(".", import.meta.url)), "../dist");
 const port = Number(process.env.PORT || 8080);
