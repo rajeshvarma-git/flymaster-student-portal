@@ -62,7 +62,7 @@ async function ensureVerificationTable() {
 
 export async function sendSignupVerificationCode(
   emailInput: string
-): Promise<{ ok: boolean; error?: string; status?: number }> {
+): Promise<{ ok: boolean; error?: string; status?: number; pendingVerification?: boolean; retryAfterSeconds?: number }> {
   await ensureVerificationTable();
   const email = normalizeEmail(emailInput);
   if (!email || !email.includes("@")) {
@@ -75,13 +75,27 @@ export async function sendSignupVerificationCode(
   }
 
   const prior = await getPool().query(
-    "SELECT last_sent_at FROM auth_signup_verifications WHERE email = $1 LIMIT 1",
+    "SELECT last_sent_at, expires_at FROM auth_signup_verifications WHERE email = $1 LIMIT 1",
     [email]
   );
-  const lastSent = prior.rows[0]?.last_sent_at ? new Date(prior.rows[0].last_sent_at).getTime() : 0;
+  const priorRow = prior.rows[0];
+  const lastSent = priorRow?.last_sent_at ? new Date(priorRow.last_sent_at).getTime() : 0;
+  const codeStillValid = priorRow?.expires_at
+    ? new Date(priorRow.expires_at).getTime() > Date.now()
+    : false;
+
   if (lastSent && Date.now() - lastSent < RESEND_COOLDOWN_MS) {
     const waitSec = Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - lastSent)) / 1000);
-    return { ok: false, error: `Please wait ${waitSec}s before requesting another code.`, status: 429 };
+    if (codeStillValid) {
+      return {
+        ok: false,
+        error: `A verification code was already sent. Check your inbox (and spam). You can resend in ${waitSec}s.`,
+        status: 429,
+        pendingVerification: true,
+        retryAfterSeconds: waitSec,
+      };
+    }
+    return { ok: false, error: `Please wait ${waitSec}s before requesting another code.`, status: 429, retryAfterSeconds: waitSec };
   }
 
   const code = generateCode();

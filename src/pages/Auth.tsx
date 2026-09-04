@@ -13,6 +13,36 @@ import { getDefaultRoute, resolvePostLoginRedirect, CHAT_PATH } from '@/lib/auth
 import { supabase } from '@/integrations/supabase/client';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 
+const SIGNUP_PENDING_KEY = 'flymasters.signup.pending';
+
+type PendingSignup = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+};
+
+function readPendingSignup(): PendingSignup | null {
+  try {
+    const raw = sessionStorage.getItem(SIGNUP_PENDING_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.email || !parsed?.password) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writePendingSignup(value: PendingSignup | null) {
+  try {
+    if (!value) sessionStorage.removeItem(SIGNUP_PENDING_KEY);
+    else sessionStorage.setItem(SIGNUP_PENDING_KEY, JSON.stringify(value));
+  } catch {
+    // Private browsing can block storage.
+  }
+}
+
 const Auth = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,14 +55,13 @@ const Auth = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [registrationSettings, setRegistrationSettings] = useState<{enabled: boolean, message?: string, admin_contact?: any} | null>(null);
-  const [signupStep, setSignupStep] = useState<'details' | 'verify'>('details');
+  const [signupStep, setSignupStep] = useState<'details' | 'verify'>(() =>
+    readPendingSignup() ? 'verify' : 'details'
+  );
   const [verificationCode, setVerificationCode] = useState('');
-  const [pendingSignup, setPendingSignup] = useState({
-    email: '',
-    password: '',
-    firstName: '',
-    lastName: '',
-  });
+  const [pendingSignup, setPendingSignup] = useState<PendingSignup>(() =>
+    readPendingSignup() || { email: '', password: '', firstName: '', lastName: '' }
+  );
   const { signIn, signUp, sendSignupVerificationCode, resetPassword, updatePassword, user, userRole, roleLoading } = useAuth();
 
   // Check if this is a password recovery or email confirmation callback
@@ -71,6 +100,13 @@ const Auth = () => {
     };
     
     fetchRegistrationSettings();
+
+    const savedSignup = readPendingSignup();
+    if (savedSignup) {
+      setPendingSignup(savedSignup);
+      setSignupStep('verify');
+      setSuccess(`Enter the verification code sent to ${savedSignup.email}.`);
+    }
   }, []);
 
   // Redirect if already authenticated (but not in recovery mode)
@@ -123,15 +159,26 @@ const Auth = () => {
       return;
     }
 
-    const { error } = await sendSignupVerificationCode(email);
+    const { error, data } = await sendSignupVerificationCode(email);
+    const signupDetails = { email, password, firstName, lastName };
 
     if (error) {
-      setError(error.message);
+      if (data?.pendingVerification) {
+        setPendingSignup(signupDetails);
+        writePendingSignup(signupDetails);
+        setVerificationCode('');
+        setSignupStep('verify');
+        setSuccess(error.message);
+        setError(null);
+      } else {
+        setError(error.message);
+      }
       setIsLoading(false);
       return;
     }
 
-    setPendingSignup({ email, password, firstName, lastName });
+    setPendingSignup(signupDetails);
+    writePendingSignup(signupDetails);
     setVerificationCode('');
     setSignupStep('verify');
     setSuccess(`Verification code sent to ${email}. Check your inbox (and spam folder).`);
@@ -164,6 +211,7 @@ const Auth = () => {
       setSuccess('Email verified. Your account is ready — you are signed in.');
       setSignupStep('details');
       setVerificationCode('');
+      writePendingSignup(null);
     }
     setIsLoading(false);
   };
@@ -174,9 +222,14 @@ const Auth = () => {
     setError(null);
     setSuccess(null);
 
-    const { error } = await sendSignupVerificationCode(pendingSignup.email);
+    const { error, data } = await sendSignupVerificationCode(pendingSignup.email);
     if (error) {
-      setError(error.message);
+      if (data?.pendingVerification) {
+        setSuccess(error.message);
+        setError(null);
+      } else {
+        setError(error.message);
+      }
     } else {
       setSuccess(`A new verification code was sent to ${pendingSignup.email}.`);
     }
@@ -586,6 +639,7 @@ const Auth = () => {
                         setError(null);
                         setSuccess(null);
                         setVerificationCode('');
+                        writePendingSignup(null);
                       }}
                     >
                       Back

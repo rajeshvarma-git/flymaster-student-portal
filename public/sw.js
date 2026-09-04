@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flymasters-v1.2.0';
+const CACHE_NAME = 'flymasters-v1.2.1';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',

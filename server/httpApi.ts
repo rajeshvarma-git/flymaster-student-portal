@@ -137,7 +137,17 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
       }
       if (body.action === "send-signup-code") {
         const result = await sendSignupVerificationCode(body.email);
-        sendJson(res, result.ok ? 200 : (result.status || 400), result.ok ? { ok: true } : { error: result.error });
+        sendJson(
+          res,
+          result.ok ? 200 : (result.status || 400),
+          result.ok
+            ? { ok: true }
+            : {
+                error: result.error,
+                pendingVerification: result.pendingVerification || false,
+                retryAfterSeconds: result.retryAfterSeconds,
+              }
+        );
         return;
       }
       if (body.action === "signout") {

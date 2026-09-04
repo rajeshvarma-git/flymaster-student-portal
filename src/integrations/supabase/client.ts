@@ -484,14 +484,24 @@ export const supabase = {
     },
     async sendSignupVerificationCode(email: string) {
       try {
-        await fetchJson(apiUrl("/__auth"), {
+        const res = await fetch(apiUrl("/__auth"), {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
           body: JSON.stringify({
             action: "send-signup-code",
             email: String(email || "").trim(),
           }),
         });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          return {
+            error: { message: payload.error || "Could not send verification code" },
+            data: {
+              pendingVerification: Boolean(payload.pendingVerification),
+              retryAfterSeconds: payload.retryAfterSeconds,
+            },
+          };
+        }
         return { error: null, data: { ok: true } };
       } catch (error: any) {
         return { error: { message: error.message || "Could not send verification code" }, data: null };
