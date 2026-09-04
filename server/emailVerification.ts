@@ -222,16 +222,29 @@ export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: str
   }
 
   if (provider === "resend") {
+    const apiKey = getResendApiKey();
+    if (!/^re_[a-zA-Z0-9_]+/.test(apiKey)) {
+      return { ok: false, provider: "resend", error: "Invalid RESEND_API_KEY format. It should start with re_" };
+    }
+
     try {
       const response = await fetch("https://api.resend.com/domains", {
-        headers: { Authorization: `Bearer ${getResendApiKey()}` },
+        headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (response.ok) return { ok: true, provider: "resend" };
+
       const payload = await response.json().catch(() => ({}));
+      const message = String(payload.message || payload.error || "");
+
+      // Send-only API keys cannot list domains but can still send emails.
+      if (/restricted to only send|sending access/i.test(message)) {
+        return { ok: true, provider: "resend" };
+      }
+
       return {
         ok: false,
         provider: "resend",
-        error: payload.message || "Invalid RESEND_API_KEY. Create one at resend.com/api-keys.",
+        error: message || "Invalid RESEND_API_KEY. Create one at resend.com/api-keys.",
       };
     } catch (error: any) {
       return { ok: false, provider: "resend", error: classifyEmailError(error, "resend") };
