@@ -10,14 +10,13 @@ import {
   writeAppState,
   writeStorageFile,
 } from "./postgres";
-import { getEmailProvider, isEmailConfigured, verifySmtpConnection } from "./emailVerification";
+import { getEmailProvider, getResendFromAddress, isEmailConfigured, verifySmtpConnection } from "./emailVerification";
 import {
   destroySession,
   getSessionByToken,
   readBearerToken,
   signInUser,
   signUpUser,
-  sendSignupVerificationCode,
   updatePasswordForToken,
 } from "./studentAuth";
 
@@ -111,6 +110,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         ...info,
         emailConfigured,
         emailProvider,
+        resendFrom: emailProvider === "resend" ? getResendFromAddress() : undefined,
         smtpOk: smtp.ok,
         smtpError: smtp.ok ? undefined : smtp.error,
         documentChecklists: (state.tables.document_checklists || []).length,
@@ -135,25 +135,9 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         const result = await signUpUser({
           email: body.email,
           password: body.password,
-          verificationCode: body.verificationCode,
           user_metadata: body.user_metadata || body.data || {},
         });
         sendJson(res, result.error ? (result.status || 400) : 200, result.error ? { error: result.error } : { session: result.session });
-        return;
-      }
-      if (body.action === "send-signup-code") {
-        const result = await sendSignupVerificationCode(body.email);
-        sendJson(
-          res,
-          result.ok ? 200 : (result.status || 400),
-          result.ok
-            ? { ok: true }
-            : {
-                error: result.error,
-                pendingVerification: result.pendingVerification || false,
-                retryAfterSeconds: result.retryAfterSeconds,
-              }
-        );
         return;
       }
       if (body.action === "signout") {

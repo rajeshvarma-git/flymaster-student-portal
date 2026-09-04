@@ -36,10 +36,50 @@ function getResendApiKey() {
   return normalizeSecret(process.env.RESEND_API_KEY || "");
 }
 
-function getResendFromAddress() {
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "icloud.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+  "mail.com",
+]);
+
+function extractEmailFromFromHeader(from: string) {
+  const match = from.match(/<([^>]+)>/);
+  return normalizeEmail(match?.[1] || from);
+}
+
+function isPublicEmailDomain(email: string) {
+  const domain = email.split("@")[1];
+  return !domain || PUBLIC_EMAIL_DOMAINS.has(domain);
+}
+
+function getResendFromName() {
+  return process.env.GMAIL_FROM_NAME || "Fly AI Pathfinder";
+}
+
+export function getResendFromAddress() {
   const configured = String(process.env.RESEND_FROM || "").trim();
-  if (configured) return configured;
-  const fromName = process.env.GMAIL_FROM_NAME || "Fly AI Pathfinder";
+  const fromName = getResendFromName();
+
+  if (configured) {
+    const email = extractEmailFromFromHeader(configured);
+    if (email && !isPublicEmailDomain(email)) {
+      return configured.includes("<") ? configured : `${fromName} <${email}>`;
+    }
+    if (email && isPublicEmailDomain(email)) {
+      console.warn(
+        `RESEND_FROM uses ${email}. Resend cannot send from Gmail/public addresses — using onboarding@resend.dev instead.`
+      );
+    }
+  }
+
   return `${fromName} <onboarding@resend.dev>`;
 }
 
@@ -68,7 +108,7 @@ function classifyEmailError(error: any, provider: "resend" | "gmail-smtp") {
       return "Invalid RESEND_API_KEY. Create one at resend.com/api-keys and add it to Railway.";
     }
     if (/domain|verify|not verified|from address/i.test(combined)) {
-      return "Resend requires a verified domain. Add your domain at resend.com/domains and set RESEND_FROM to an address on that domain.";
+      return "RESEND_FROM cannot be a Gmail address. Use Fly AI Pathfinder <onboarding@resend.dev> for testing, or verify your own domain at resend.com/domains.";
     }
     return message || "Could not send email through Resend. Check RESEND_API_KEY and RESEND_FROM in Railway.";
   }

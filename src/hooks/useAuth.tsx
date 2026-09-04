@@ -14,8 +14,7 @@ interface AuthContextType {
   loading: boolean;
   roleLoading: boolean;
   profileLoading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string, verificationCode: string) => Promise<{ error: any }>;
-  sendSignupVerificationCode: (email: string) => Promise<{ error: any; data?: { ok?: boolean; pendingVerification?: boolean; retryAfterSeconds?: number } | null }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
@@ -35,7 +34,6 @@ const AuthContext = createContext<AuthContextType>({
   roleLoading: false,
   profileLoading: false,
   signUp: async () => ({ error: null }),
-  sendSignupVerificationCode: async () => ({ error: null, data: { ok: true } }),
   signIn: async () => ({ error: null }),
   signOut: async () => {},
   resetPassword: async () => ({ error: null }),
@@ -192,13 +190,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     email: string,
     password: string,
     firstName: string,
-    lastName: string,
-    verificationCode: string
+    lastName: string
   ) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      verificationCode,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
         data: {
@@ -208,11 +204,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       },
     });
     return { error };
-  };
-
-  const sendSignupVerificationCode = async (email: string) => {
-    const { error, data } = await supabase.auth.sendSignupVerificationCode(email);
-    return { error, data };
   };
 
   const signIn = async (email: string, password: string) => {
@@ -305,7 +296,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     roleLoading,
     profileLoading,
     signUp,
-    sendSignupVerificationCode,
     signIn,
     signOut,
     resetPassword,

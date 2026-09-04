@@ -7,41 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { GraduationCap, Mail, Lock, User, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { GraduationCap, Mail, Lock, User, ArrowLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { getDefaultRoute, resolvePostLoginRedirect, CHAT_PATH } from '@/lib/auth-utils';
 import { supabase } from '@/integrations/supabase/client';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-
-const SIGNUP_PENDING_KEY = 'flymasters.signup.pending';
-
-type PendingSignup = {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-};
-
-function readPendingSignup(): PendingSignup | null {
-  try {
-    const raw = sessionStorage.getItem(SIGNUP_PENDING_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.email || !parsed?.password) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function writePendingSignup(value: PendingSignup | null) {
-  try {
-    if (!value) sessionStorage.removeItem(SIGNUP_PENDING_KEY);
-    else sessionStorage.setItem(SIGNUP_PENDING_KEY, JSON.stringify(value));
-  } catch {
-    // Private browsing can block storage.
-  }
-}
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -55,14 +24,7 @@ const Auth = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [registrationSettings, setRegistrationSettings] = useState<{enabled: boolean, message?: string, admin_contact?: any} | null>(null);
-  const [signupStep, setSignupStep] = useState<'details' | 'verify'>(() =>
-    readPendingSignup() ? 'verify' : 'details'
-  );
-  const [verificationCode, setVerificationCode] = useState('');
-  const [pendingSignup, setPendingSignup] = useState<PendingSignup>(() =>
-    readPendingSignup() || { email: '', password: '', firstName: '', lastName: '' }
-  );
-  const { signIn, signUp, sendSignupVerificationCode, resetPassword, updatePassword, user, userRole, roleLoading } = useAuth();
+  const { signIn, signUp, resetPassword, updatePassword, user, userRole, roleLoading } = useAuth();
 
   // Check if this is a password recovery or email confirmation callback
   useEffect(() => {
@@ -100,13 +62,6 @@ const Auth = () => {
     };
     
     fetchRegistrationSettings();
-
-    const savedSignup = readPendingSignup();
-    if (savedSignup) {
-      setPendingSignup(savedSignup);
-      setSignupStep('verify');
-      setSuccess(`Enter the verification code sent to ${savedSignup.email}.`);
-    }
   }, []);
 
   // Redirect if already authenticated (but not in recovery mode)
@@ -135,7 +90,7 @@ const Auth = () => {
     // Note: If successful, signIn will redirect automatically
   };
 
-  const handleSendSignupCode = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
@@ -159,79 +114,10 @@ const Auth = () => {
       return;
     }
 
-    const { error, data } = await sendSignupVerificationCode(email);
-    const signupDetails = { email, password, firstName, lastName };
-
-    if (error) {
-      if (data?.pendingVerification) {
-        setPendingSignup(signupDetails);
-        writePendingSignup(signupDetails);
-        setVerificationCode('');
-        setSignupStep('verify');
-        setSuccess(error.message);
-        setError(null);
-      } else {
-        setError(error.message);
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    setPendingSignup(signupDetails);
-    writePendingSignup(signupDetails);
-    setVerificationCode('');
-    setSignupStep('verify');
-    setSuccess(`Verification code sent to ${email}. Check your inbox (and spam folder).`);
-    setIsLoading(false);
-  };
-
-  const handleVerifyAndSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    if (verificationCode.length !== 6) {
-      setError('Enter the 6-digit verification code from your email.');
-      setIsLoading(false);
-      return;
-    }
-
-    const { error } = await signUp(
-      pendingSignup.email,
-      pendingSignup.password,
-      pendingSignup.firstName,
-      pendingSignup.lastName,
-      verificationCode
-    );
+    const { error } = await signUp(email, password, firstName, lastName);
 
     if (error) {
       setError(error.message);
-    } else {
-      setSuccess('Email verified. Your account is ready — you are signed in.');
-      setSignupStep('details');
-      setVerificationCode('');
-      writePendingSignup(null);
-    }
-    setIsLoading(false);
-  };
-
-  const handleResendSignupCode = async () => {
-    if (!pendingSignup.email) return;
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    const { error, data } = await sendSignupVerificationCode(pendingSignup.email);
-    if (error) {
-      if (data?.pendingVerification) {
-        setSuccess(error.message);
-        setError(null);
-      } else {
-        setError(error.message);
-      }
-    } else {
-      setSuccess(`A new verification code was sent to ${pendingSignup.email}.`);
     }
     setIsLoading(false);
   };
@@ -494,8 +380,7 @@ const Auth = () => {
                   </Alert>
                 )}
 
-                {signupStep === 'details' ? (
-                <form onSubmit={handleSendSignupCode} className="space-y-4">
+                <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
@@ -573,89 +458,9 @@ const Auth = () => {
                     variant="hero"
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Sending Code...' : 'Send Verification Code'}
+                    {isLoading ? 'Creating Account...' : 'Create Account'}
                   </Button>
                 </form>
-                ) : (
-                <form onSubmit={handleVerifyAndSignUp} className="space-y-4">
-                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center space-y-2">
-                    <ShieldCheck className="w-8 h-8 mx-auto text-primary" />
-                    <p className="text-sm font-medium">Verify your email</p>
-                    <p className="text-sm text-muted-foreground">
-                      Enter the 6-digit code sent to <span className="font-medium text-foreground">{pendingSignup.email}</span>
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="verification-code">Verification Code</Label>
-                    <div className="flex justify-center">
-                      <InputOTP
-                        id="verification-code"
-                        maxLength={6}
-                        value={verificationCode}
-                        onChange={setVerificationCode}
-                      >
-                        <InputOTPGroup>
-                          <InputOTPSlot index={0} />
-                          <InputOTPSlot index={1} />
-                          <InputOTPSlot index={2} />
-                          <InputOTPSlot index={3} />
-                          <InputOTPSlot index={4} />
-                          <InputOTPSlot index={5} />
-                        </InputOTPGroup>
-                      </InputOTP>
-                    </div>
-                  </div>
-
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  {success && (
-                    <Alert>
-                      <AlertDescription>{success}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
-                    variant="hero"
-                    disabled={isLoading || verificationCode.length !== 6}
-                  >
-                    {isLoading ? 'Verifying...' : 'Verify & Create Account'}
-                  </Button>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1"
-                      disabled={isLoading}
-                      onClick={() => {
-                        setSignupStep('details');
-                        setError(null);
-                        setSuccess(null);
-                        setVerificationCode('');
-                        writePendingSignup(null);
-                      }}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="flex-1"
-                      disabled={isLoading}
-                      onClick={handleResendSignupCode}
-                    >
-                      Resend Code
-                    </Button>
-                  </div>
-                </form>
-                )}
               </TabsContent>
 
               <TabsContent value="reset" className="space-y-4">
