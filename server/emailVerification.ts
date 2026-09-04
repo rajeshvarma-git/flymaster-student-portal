@@ -1,6 +1,6 @@
 import { createHash, randomInt } from "crypto";
+import dns from "dns";
 import nodemailer from "nodemailer";
-import type Transporter from "nodemailer/lib/mailer";
 import { ensureSchema, getPool } from "./postgres";
 
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -32,6 +32,85 @@ function getEmailCredentials() {
   return { user, pass };
 }
 
+function getResendApiKey() {
+  return normalizeSecret(process.env.RESEND_API_KEY || "");
+}
+
+function getResendFromAddress() {
+  const configured = String(process.env.RESEND_FROM || "").trim();
+  if (configured) return configured;
+  const fromName = process.env.GMAIL_FROM_NAME || "Fly AI Pathfinder";
+  return `${fromName} <onboarding@resend.dev>`;
+}
+
+export function getEmailProvider(): "resend" | "gmail-smtp" | "none" {
+  if (getResendApiKey()) return "resend";
+  const { user, pass } = getEmailCredentials();
+  if (user && pass) return "gmail-smtp";
+  return "none";
+}
+
+function mailNotConfiguredMessage() {
+  return "Email is not configured. On Railway, set RESEND_API_KEY (recommended). For local dev you can use GMAIL_USER + GMAIL_APP_PASSWORD.";
+}
+
+export function isEmailConfigured() {
+  return getEmailProvider() !== "none";
+}
+
+function classifyEmailError(error: any, provider: "resend" | "gmail-smtp") {
+  const message = String(error?.message || "");
+  const response = String(error?.response || "");
+  const combined = `${message} ${response}`.toLowerCase();
+
+  if (provider === "resend") {
+    if (/invalid api key|unauthorized|401/i.test(combined)) {
+      return "Invalid RESEND_API_KEY. Create one at resend.com/api-keys and add it to Railway.";
+    }
+    if (/domain|verify|not verified|from address/i.test(combined)) {
+      return "Resend requires a verified domain. Add your domain at resend.com/domains and set RESEND_FROM to an address on that domain.";
+    }
+    return message || "Could not send email through Resend. Check RESEND_API_KEY and RESEND_FROM in Railway.";
+  }
+
+  if (/invalid login|authentication failed|username and password not accepted|535|534-5\.7\.9|eauth/i.test(combined)) {
+    return "Gmail rejected the login. Use a Google App Password and set GMAIL_USER + GMAIL_APP_PASSWORD.";
+  }
+  if (/timeout|timed out|etimedout|econnrefused|enotfound|connect/i.test(combined)) {
+    return "Gmail SMTP is blocked on Railway Free/Hobby plans. Use RESEND_API_KEY instead (see resend.com).";
+  }
+  return message || "Could not send verification email.";
+}
+
+async function sendViaResend(input: { to: string; subject: string; text: string; html: string }) {
+  const apiKey = getResendApiKey();
+  if (!apiKey) throw new Error("RESEND_API_KEY is not configured.");
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: getResendFromAddress(),
+      to: [input.to],
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const err = new Error(payload.message || payload.error || `Resend request failed (${response.status})`) as Error & {
+      response?: string;
+    };
+    err.response = JSON.stringify(payload);
+    throw err;
+  }
+}
+
 function getGmailTransportOptions(): Array<{
   label: string;
   options: nodemailer.TransportOptions;
@@ -40,6 +119,9 @@ function getGmailTransportOptions(): Array<{
   const host = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
   const configuredPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : null;
   const configuredSecure = process.env.SMTP_SECURE === "true";
+  const ipv4Lookup = (hostname: string, _options: unknown, callback: (...args: any[]) => void) => {
+    dns.lookup(hostname, { family: 4 }, callback);
+  };
 
   if (process.env.SMTP_HOST || configuredPort) {
     const port = configuredPort || 465;
@@ -55,11 +137,11 @@ function getGmailTransportOptions(): Array<{
         connectionTimeout: 20_000,
         greetingTimeout: 20_000,
         socketTimeout: 30_000,
+        dns: { lookup: ipv4Lookup },
       },
     }];
   }
 
-  // Railway and many cloud hosts block outbound 587; prefer 465 first.
   return [
     {
       label: "gmail:465",
@@ -72,6 +154,7 @@ function getGmailTransportOptions(): Array<{
         connectionTimeout: 20_000,
         greetingTimeout: 20_000,
         socketTimeout: 30_000,
+        dns: { lookup: ipv4Lookup },
       },
     },
     {
@@ -86,23 +169,30 @@ function getGmailTransportOptions(): Array<{
         connectionTimeout: 20_000,
         greetingTimeout: 20_000,
         socketTimeout: 30_000,
+        dns: { lookup: ipv4Lookup },
       },
     },
   ];
 }
 
-function createMailer(options: nodemailer.TransportOptions): Transporter {
-  return nodemailer.createTransport(options);
-}
+async function sendViaGmailSmtp(input: { to: string; subject: string; text: string; html: string }) {
+  const { user, pass } = getEmailCredentials();
+  if (!user || !pass) throw new Error("Gmail SMTP is not configured.");
 
-async function withMailer<T>(fn: (mailer: Transporter) => Promise<T>): Promise<T> {
-  const transports = getGmailTransportOptions();
+  const fromName = process.env.GMAIL_FROM_NAME || "Fly AI Pathfinder";
   let lastError: any = null;
 
-  for (const transport of transports) {
-    const mailer = createMailer(transport.options);
+  for (const transport of getGmailTransportOptions()) {
+    const mailer = nodemailer.createTransport(transport.options);
     try {
-      return await fn(mailer);
+      await mailer.sendMail({
+        from: `"${fromName}" <${user}>`,
+        to: input.to,
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+      });
+      return;
     } catch (error) {
       lastError = error;
       console.error(`SMTP attempt failed (${transport.label}):`, error);
@@ -112,46 +202,59 @@ async function withMailer<T>(fn: (mailer: Transporter) => Promise<T>): Promise<T
   throw lastError || new Error("Could not connect to Gmail SMTP.");
 }
 
-function mailNotConfiguredMessage() {
-  return "Email service is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD in Railway, then redeploy.";
+async function sendVerificationEmail(input: { to: string; subject: string; text: string; html: string }) {
+  const provider = getEmailProvider();
+  if (provider === "resend") {
+    await sendViaResend(input);
+    return;
+  }
+  if (provider === "gmail-smtp") {
+    await sendViaGmailSmtp(input);
+    return;
+  }
+  throw new Error(mailNotConfiguredMessage());
 }
 
-export function isEmailConfigured() {
-  const { user, pass } = getEmailCredentials();
-  return Boolean(user && pass);
-}
-
-function classifySmtpError(error: any) {
-  const message = String(error?.message || "");
-  const response = String(error?.response || "");
-  const combined = `${message} ${response}`.toLowerCase();
-
-  if (/invalid login|authentication failed|username and password not accepted|535|534-5\.7\.9|eauth/i.test(combined)) {
-    return "Gmail rejected the login. Use a Google App Password (not your normal password) and set GMAIL_USER + GMAIL_APP_PASSWORD in Railway.";
+export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: string; provider?: string }> {
+  const provider = getEmailProvider();
+  if (provider === "none") {
+    return { ok: false, error: "Email credentials are missing.", provider: "none" };
   }
-  if (/daily user sending quota|550-5\.4\.5|too many emails/i.test(combined)) {
-    return "Gmail daily sending limit reached. Try again tomorrow or use a different sender account.";
-  }
-  if (/timeout|timed out|etimedout|econnrefused|enotfound|connect/i.test(combined)) {
-    return "Could not connect to Gmail SMTP from the server. Check Railway variables and try SMTP_PORT=465 with SMTP_SECURE=true.";
-  }
-  return "Could not send verification email. Confirm GMAIL_USER and GMAIL_APP_PASSWORD in Railway, then redeploy.";
-}
 
-export async function verifySmtpConnection(): Promise<{ ok: boolean; error?: string }> {
-  const { user, pass } = getEmailCredentials();
-  if (!user || !pass) {
-    return { ok: false, error: "Gmail credentials are missing." };
+  if (provider === "resend") {
+    try {
+      const response = await fetch("https://api.resend.com/domains", {
+        headers: { Authorization: `Bearer ${getResendApiKey()}` },
+      });
+      if (response.ok) return { ok: true, provider: "resend" };
+      const payload = await response.json().catch(() => ({}));
+      return {
+        ok: false,
+        provider: "resend",
+        error: payload.message || "Invalid RESEND_API_KEY. Create one at resend.com/api-keys.",
+      };
+    } catch (error: any) {
+      return { ok: false, provider: "resend", error: classifyEmailError(error, "resend") };
+    }
   }
 
   try {
-    await withMailer(async (mailer) => {
-      await mailer.verify();
-    });
-    return { ok: true };
+    for (const transport of getGmailTransportOptions()) {
+      const mailer = nodemailer.createTransport(transport.options);
+      try {
+        await mailer.verify();
+        return { ok: true, provider: "gmail-smtp" };
+      } catch (error) {
+        console.error(`SMTP verify failed (${transport.label}):`, error);
+      }
+    }
+    return {
+      ok: false,
+      provider: "gmail-smtp",
+      error: "Gmail SMTP is blocked on Railway Free/Hobby plans. Set RESEND_API_KEY instead.",
+    };
   } catch (error: any) {
-    console.error("SMTP verification failed:", error);
-    return { ok: false, error: classifySmtpError(error) };
+    return { ok: false, provider: "gmail-smtp", error: classifyEmailError(error, "gmail-smtp") };
   }
 }
 
@@ -192,6 +295,10 @@ export async function sendSignupVerificationCode(
     return { ok: false, error: "Enter a valid email address.", status: 400 };
   }
 
+  if (!isEmailConfigured()) {
+    return { ok: false, error: mailNotConfiguredMessage(), status: 503 };
+  }
+
   const existing = await getPool().query("SELECT id FROM auth_users WHERE lower(email) = $1 LIMIT 1", [email]);
   if (existing.rows[0]) {
     return { ok: false, error: "An account with this email already exists. Please sign in.", status: 409 };
@@ -221,38 +328,25 @@ export async function sendSignupVerificationCode(
     return { ok: false, error: `Please wait ${waitSec}s before requesting another code.`, status: 429, retryAfterSeconds: waitSec };
   }
 
-  const mailerConfigured = getEmailCredentials();
-  const fromName = process.env.GMAIL_FROM_NAME || "Fly AI Pathfinder";
-  const fromAddress = mailerConfigured.user;
-
-  if (!fromAddress || !mailerConfigured.pass) {
-    console.error("Verification email skipped: Gmail SMTP is not configured.");
-    return { ok: false, error: mailNotConfiguredMessage(), status: 503 };
-  }
-
   const code = generateCode();
+  const subject = "Your Fly AI Pathfinder verification code";
+  const text = `Your verification code is ${code}. It expires in 10 minutes.`;
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+      <h2 style="color:#1e40af;margin-bottom:8px">Verify your email</h2>
+      <p style="color:#475569;margin-top:0">Use this code to finish creating your Fly AI Pathfinder account:</p>
+      <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:#0f172a;padding:16px 0">${code}</div>
+      <p style="color:#64748b;font-size:14px">This code expires in 10 minutes. If you did not request this, you can ignore this email.</p>
+    </div>
+  `;
 
   try {
-    await withMailer(async (mailer) => {
-      await mailer.sendMail({
-        from: `"${fromName}" <${fromAddress}>`,
-        to: email,
-        subject: "Your Fly AI Pathfinder verification code",
-        text: `Your verification code is ${code}. It expires in 10 minutes.`,
-        html: `
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-          <h2 style="color:#1e40af;margin-bottom:8px">Verify your email</h2>
-          <p style="color:#475569;margin-top:0">Use this code to finish creating your Fly AI Pathfinder account:</p>
-          <div style="font-size:32px;font-weight:700;letter-spacing:8px;color:#0f172a;padding:16px 0">${code}</div>
-          <p style="color:#64748b;font-size:14px">This code expires in 10 minutes. If you did not request this, you can ignore this email.</p>
-        </div>
-      `,
-      });
-    });
-    console.log(`Verification email sent to ${email}`);
+    await sendVerificationEmail({ to: email, subject, text, html });
+    console.log(`Verification email sent to ${email} via ${getEmailProvider()}`);
   } catch (error: any) {
     console.error("Failed to send verification email:", error);
-    return { ok: false, error: classifySmtpError(error), status: 503 };
+    const provider = getEmailProvider() === "resend" ? "resend" : "gmail-smtp";
+    return { ok: false, error: classifyEmailError(error, provider), status: 503 };
   }
 
   await storeVerificationCode(email, code);
