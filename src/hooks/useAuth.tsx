@@ -14,7 +14,8 @@ interface AuthContextType {
   loading: boolean;
   roleLoading: boolean;
   profileLoading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any }>;
+  sendVerificationCode: (email: string) => Promise<{ error: any; retryAfterSeconds?: number }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string, verificationCode: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
@@ -33,6 +34,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   roleLoading: false,
   profileLoading: false,
+  sendVerificationCode: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
   signIn: async () => ({ error: null }),
   signOut: async () => {},
@@ -186,15 +188,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const sendVerificationCode = async (email: string) => {
+    const { error } = await supabase.auth.sendVerificationCode(email);
+    return {
+      error,
+      retryAfterSeconds: error?.retryAfterSeconds as number | undefined,
+    };
+  };
+
   const signUp = async (
     email: string,
     password: string,
     firstName: string,
-    lastName: string
+    lastName: string,
+    verificationCode: string
   ) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      verificationCode,
       options: {
         emailRedirectTo: `${window.location.origin}/`,
         data: {
@@ -295,6 +307,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     loading,
     roleLoading,
     profileLoading,
+    sendVerificationCode,
     signUp,
     signIn,
     signOut,
