@@ -11,12 +11,9 @@ import {
   writeStorageFile,
 } from "./postgres";
 import {
-  clearSignupVerification,
   getEmailProvider,
   getResendFromAddress,
   isEmailConfigured,
-  sendSignupVerificationCode,
-  verifySignupCode,
   verifySmtpConnection,
 } from "./emailVerification";
 import {
@@ -139,21 +136,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         sendJson(res, result.error ? (result.status || 401) : 200, result.error ? { error: result.error } : { session: result.session });
         return;
       }
-      if (body.action === "send-verification-code") {
-        const result = await sendSignupVerificationCode(body.email);
-        sendJson(res, result.ok ? 200 : (result.status || 400), result.ok ? { ok: true } : {
-          error: result.error,
-          pendingVerification: result.pendingVerification,
-          retryAfterSeconds: result.retryAfterSeconds,
-        });
-        return;
-      }
       if (body.action === "signup") {
-        const verifyResult = await verifySignupCode(body.email, body.verificationCode);
-        if (!verifyResult.ok) {
-          sendJson(res, verifyResult.status || 400, { error: verifyResult.error });
-          return;
-        }
         const result = await signUpUser({
           email: body.email,
           password: body.password,
@@ -163,7 +146,6 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
           sendJson(res, result.status || 400, { error: result.error });
           return;
         }
-        await clearSignupVerification(body.email);
         sendJson(res, 200, { session: result.session });
         return;
       }

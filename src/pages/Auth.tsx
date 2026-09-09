@@ -7,11 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { GraduationCap, Mail, Lock, User, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { GraduationCap, Mail, Lock, User, ArrowLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { getDefaultRoute, resolvePostLoginRedirect, CHAT_PATH } from '@/lib/auth-utils';
 import { supabase } from '@/integrations/supabase/client';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -25,11 +24,7 @@ const Auth = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [registrationSettings, setRegistrationSettings] = useState<{enabled: boolean, message?: string, admin_contact?: any} | null>(null);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [verificationSent, setVerificationSent] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [signupEmail, setSignupEmail] = useState('');
-  const { signIn, signUp, sendVerificationCode, resetPassword, updatePassword, user, userRole, roleLoading } = useAuth();
+  const { signIn, signUp, resetPassword, updatePassword, user, userRole, roleLoading } = useAuth();
 
   // Check if this is a password recovery or email confirmation callback
   useEffect(() => {
@@ -77,44 +72,6 @@ const Auth = () => {
     }
   }, [user, isRecoveryMode, roleLoading, userRole, navigate, redirectTo]);
 
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const timer = window.setInterval(() => {
-      setResendCooldown((current) => (current <= 1 ? 0 : current - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [resendCooldown]);
-
-  const handleSendVerificationCode = async (email: string) => {
-    setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail || !normalizedEmail.includes('@')) {
-      setError('Enter a valid email address.');
-      setIsLoading(false);
-      return;
-    }
-
-    const { error, retryAfterSeconds } = await sendVerificationCode(normalizedEmail);
-
-    if (error) {
-      setError(error.message);
-      if (error.pendingVerification || retryAfterSeconds) {
-        setVerificationSent(true);
-        setSignupEmail(normalizedEmail);
-        if (retryAfterSeconds) setResendCooldown(retryAfterSeconds);
-      }
-    } else {
-      setVerificationSent(true);
-      setSignupEmail(normalizedEmail);
-      setSuccess(`Verification code sent to ${normalizedEmail}. Check your inbox and spam folder.`);
-      setResendCooldown(60);
-    }
-    setIsLoading(false);
-  };
-
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
@@ -157,18 +114,7 @@ const Auth = () => {
       return;
     }
 
-    if (!verificationSent) {
-      await handleSendVerificationCode(email);
-      return;
-    }
-
-    if (verificationCode.length !== 6) {
-      setError('Enter the 6-digit verification code sent to your email.');
-      setIsLoading(false);
-      return;
-    }
-
-    const { error } = await signUp(email, password, firstName, lastName, verificationCode);
+    const { error } = await signUp(email, password, firstName, lastName);
 
     if (error) {
       setError(error.message);
@@ -436,7 +382,7 @@ const Auth = () => {
                   </Alert>
                 )}
 
-                <form id="signup-form" onSubmit={handleSignUp} className="space-y-4">
+                <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name</Label>
@@ -476,8 +422,6 @@ const Auth = () => {
                         placeholder="Enter your email"
                         className="pl-10"
                         required
-                        value={signupEmail}
-                        onChange={(event) => setSignupEmail(event.target.value)}
                       />
                     </div>
                   </div>
@@ -498,64 +442,6 @@ const Auth = () => {
                     </div>
                   </div>
 
-                  {verificationSent && (
-                    <div className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
-                      <div className="flex items-center gap-2 text-sm font-medium text-primary">
-                        <ShieldCheck className="h-4 w-4" />
-                        Verify your email
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Enter the 6-digit code sent to {signupEmail || 'your email'}.
-                      </p>
-                      <div className="flex justify-center">
-                        <InputOTP
-                          maxLength={6}
-                          value={verificationCode}
-                          onChange={setVerificationCode}
-                        >
-                          <InputOTPGroup>
-                            <InputOTPSlot index={0} />
-                            <InputOTPSlot index={1} />
-                            <InputOTPSlot index={2} />
-                            <InputOTPSlot index={3} />
-                            <InputOTPSlot index={4} />
-                            <InputOTPSlot index={5} />
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="px-0 text-muted-foreground"
-                          onClick={() => {
-                            setVerificationSent(false);
-                            setVerificationCode('');
-                            setSuccess(null);
-                            setError(null);
-                          }}
-                        >
-                          Change email
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          className="px-0"
-                          disabled={isLoading || resendCooldown > 0}
-                          onClick={() => {
-                            const form = document.getElementById('signup-form') as HTMLFormElement | null;
-                            const emailInput = form?.elements.namedItem('email') as HTMLInputElement | null;
-                            handleSendVerificationCode(emailInput?.value || signupEmail);
-                          }}
-                        >
-                          {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
                   {error && (
                     <Alert variant="destructive">
                       <AlertDescription>{error}</AlertDescription>
@@ -574,13 +460,7 @@ const Auth = () => {
                     variant="hero"
                     disabled={isLoading}
                   >
-                    {isLoading
-                      ? verificationSent
-                        ? 'Creating Account...'
-                        : 'Sending Code...'
-                      : verificationSent
-                        ? 'Create Account'
-                        : 'Send Verification Code'}
+                    {isLoading ? 'Creating Account...' : 'Sign Up'}
                   </Button>
                 </form>
               </TabsContent>

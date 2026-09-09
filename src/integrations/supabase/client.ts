@@ -452,34 +452,13 @@ export const supabase = {
         return { data: { user: null, session: null }, error: { message: error.message || "Invalid email or password" } };
       }
     },
-    async sendVerificationCode(email: string) {
-      try {
-        const payload = await fetchJson(apiUrl("/__auth"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "send-verification-code", email: String(email || "").trim() }),
-        });
-        return { data: payload, error: null };
-      } catch (error: any) {
-        return {
-          data: null,
-          error: {
-            message: error.message || "Could not send verification code",
-            pendingVerification: error.details?.pendingVerification,
-            retryAfterSeconds: error.details?.retryAfterSeconds,
-          },
-        };
-      }
-    },
     async signUp({
       email,
       password,
-      verificationCode,
       options,
     }: {
       email: string;
       password: string;
-      verificationCode: string;
       options?: { data?: Record<string, any>; emailRedirectTo?: string };
     }) {
       try {
@@ -490,7 +469,6 @@ export const supabase = {
             action: "signup",
             email: String(email || "").trim(),
             password,
-            verificationCode: String(verificationCode || "").trim(),
             user_metadata: options?.data || {},
           }),
         });
