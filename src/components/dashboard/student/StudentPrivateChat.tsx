@@ -16,7 +16,10 @@ import {
   CheckCircle2,
   Circle,
   Bot,
-  RefreshCw
+  RefreshCw,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -28,7 +31,13 @@ interface PrivateMessage {
   receiver_id: string;
   is_read: boolean;
   created_at: string;
+  updated_at?: string;
 }
+
+const isMessageEdited = (msg: PrivateMessage) => {
+  if (!msg.updated_at) return false;
+  return new Date(msg.updated_at).getTime() - new Date(msg.created_at).getTime() > 1000;
+};
 
 interface Conversation {
   id: string;
@@ -47,6 +56,9 @@ export function StudentPrivateChat() {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [sending, setSending] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -80,6 +92,22 @@ export function StudentPrivateChat() {
             if (prev.some((msg) => msg.id === incoming.id)) return prev;
             return [...prev, incoming];
           });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'private_messages',
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
+        (payload) => {
+          const updated = payload?.new as PrivateMessage | undefined;
+          if (!updated?.id) return;
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === updated.id ? { ...msg, ...updated } : msg))
+          );
         }
       )
       .subscribe();
@@ -291,6 +319,59 @@ export function StudentPrivateChat() {
     }
   };
 
+  const startEdit = (message: PrivateMessage) => {
+    setEditingMessageId(message.id);
+    setEditText(message.message);
+  };
+
+  const cancelEdit = () => {
+    setEditingMessageId(null);
+    setEditText('');
+  };
+
+  const saveEdit = async () => {
+    if (!editingMessageId || !editText.trim() || savingEdit || !user) return;
+
+    const text = editText.trim();
+    const messageId = editingMessageId;
+    const now = new Date().toISOString();
+
+    try {
+      setSavingEdit(true);
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, message: text, updated_at: now } : msg
+        )
+      );
+      setEditingMessageId(null);
+      setEditText('');
+
+      const { error } = await supabase
+        .from('private_messages')
+        .update({ message: text, updated_at: now })
+        .eq('id', messageId)
+        .eq('sender_id', user.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error editing message:', error);
+      toast.error('Failed to edit message');
+      if (conversation) await fetchMessages(conversation.id);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleEditKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      saveEdit();
+    }
+    if (e.key === 'Escape') {
+      cancelEdit();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -377,7 +458,7 @@ export function StudentPrivateChat() {
             </div>
           ) : (
             messages.map((message) => (
-              <div key={message.id} className={`flex gap-3 ${
+              <div key={message.id} className={`group flex gap-3 ${
                 message.sender_id === user?.id ? 'justify-end' : 'justify-start'
               }`}>
                 {message.sender_id !== user?.id && (
@@ -392,18 +473,66 @@ export function StudentPrivateChat() {
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted'
                 }`}>
-                  <p className="text-sm">{message.message}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Clock className="w-3 h-3 opacity-60" />
-                    <span className="text-xs opacity-60">
-                      {format(new Date(message.created_at), 'HH:mm')}
-                    </span>
-                    {message.sender_id === user?.id && (
-                      <CheckCircle2 className={`w-3 h-3 ${
-                        message.is_read ? 'text-blue-400' : 'opacity-40'
-                      }`} />
-                    )}
-                  </div>
+                  {editingMessageId === message.id ? (
+                    <div className="flex flex-col gap-2">
+                      <Input
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={handleEditKeyPress}
+                        autoFocus
+                        disabled={savingEdit}
+                        className="text-sm h-8 bg-primary-foreground/10 border-primary-foreground/30 text-primary-foreground placeholder:text-primary-foreground/50"
+                      />
+                      <div className="flex gap-1 justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={cancelEdit}
+                          disabled={savingEdit}
+                          className="h-6 px-2 text-primary-foreground hover:bg-primary-foreground/10"
+                        >
+                          <X className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={saveEdit}
+                          disabled={!editText.trim() || savingEdit}
+                          className="h-6 px-2 text-primary-foreground hover:bg-primary-foreground/10"
+                        >
+                          <Check className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm">{message.message}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <Clock className="w-3 h-3 opacity-60" />
+                        <span className="text-xs opacity-60">
+                          {format(new Date(message.created_at), 'HH:mm')}
+                        </span>
+                        {isMessageEdited(message) && (
+                          <span className="text-xs opacity-60 italic">edited</span>
+                        )}
+                        {message.sender_id === user?.id && (
+                          <>
+                            <CheckCircle2 className={`w-3 h-3 ${
+                              message.is_read ? 'text-blue-400' : 'opacity-40'
+                            }`} />
+                            <button
+                              type="button"
+                              onClick={() => startEdit(message)}
+                              className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity ml-0.5"
+                              title="Edit message"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
                 {message.sender_id === user?.id && (
                   <Avatar className="w-6 h-6 mt-1">

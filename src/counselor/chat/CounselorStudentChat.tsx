@@ -19,7 +19,13 @@ interface PrivateMessage {
   receiver_id: string;
   is_read: boolean;
   created_at: string;
+  updated_at?: string;
 }
+
+const isMessageEdited = (msg: PrivateMessage) => {
+  if (!msg.updated_at) return false;
+  return new Date(msg.updated_at).getTime() - new Date(msg.created_at).getTime() > 1000;
+};
 
 interface Conversation {
   id: string;
@@ -74,6 +80,24 @@ export function CounselorStudentChat() {
             if (incoming.receiver_id === user.id) {
               markConversationRead(activeConversation.id);
             }
+          }
+          loadConversations();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'private_messages',
+        },
+        (payload) => {
+          const updated = payload?.new as (PrivateMessage & { conversation_id?: string }) | undefined;
+          if (!updated?.id) return;
+          if (activeConversation && updated.conversation_id === activeConversation.id) {
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === updated.id ? { ...msg, ...updated } : msg))
+            );
           }
           loadConversations();
         }
@@ -375,6 +399,9 @@ export function CounselorStudentChat() {
                             <span className="text-xs opacity-60">
                               {format(new Date(message.created_at), 'HH:mm')}
                             </span>
+                            {isMessageEdited(message) && (
+                              <span className="text-xs opacity-60 italic">edited</span>
+                            )}
                             {message.sender_id === user?.id && (
                               <CheckCircle2
                                 className={`w-3 h-3 ${message.is_read ? 'text-blue-400' : 'opacity-40'}`}
