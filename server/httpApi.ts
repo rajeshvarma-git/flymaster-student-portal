@@ -24,7 +24,7 @@ import {
   signUpUser,
   updatePasswordForToken,
 } from "./studentAuth";
-import { handleWhatsAppRequest, isWhatsAppConfigured, isWhatsAppPath } from "./whatsapp";
+import { getWhatsAppHealth, handleWhatsAppRequest, isWhatsAppConfigured, isWhatsAppPath } from "./whatsapp";
 
 const API_PATHS = new Set(["/__local_db", "/__db_health", "/__auth", "/__session", "/__storage"]);
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -122,6 +122,7 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         documentChecklists: (state.tables.document_checklists || []).length,
         whatsappConfigured: isWhatsAppConfigured(),
         whatsappProvider: process.env.WHATSAPP_PROVIDER || "meta",
+        whatsapp: await getWhatsAppHealth(),
       });
       return;
     }

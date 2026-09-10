@@ -16,11 +16,18 @@ function normalizeSecret(value: string) {
   return String(value || "")
     .trim()
     .replace(/^['"]+|['"]+$/g, "")
+    .replace(/^Bearer\s+/i, "")
     .replace(/\s+/g, "");
 }
 
 function getAccessToken() {
-  return normalizeSecret(process.env.WHATSAPP_API_KEY || process.env.WHATSAPP_ACCESS_TOKEN || "");
+  return normalizeSecret(
+    process.env.WHATSAPP_API_KEY ||
+      process.env.WHATSAPP_ACCESS_TOKEN ||
+      process.env.META_WHATSAPP_TOKEN ||
+      process.env.CLOUD_API_ACCESS_TOKEN ||
+      ""
+  );
 }
 
 function getPhoneNumberId() {
@@ -40,7 +47,10 @@ function getGraphVersion() {
 }
 
 function getOtpTemplateName() {
-  return normalizeSecret(process.env.WHATSAPP_OTP_TEMPLATE_NAME || "") || "flymasters_otp";
+  return (
+    normalizeSecret(process.env.WHATSAPP_OTP_TEMPLATE_NAME || process.env.WHATSAPP_OTP_TEMPLATE || "") ||
+    "flymasters_otp"
+  );
 }
 
 function getOtpTemplateLanguage() {
@@ -49,6 +59,32 @@ function getOtpTemplateLanguage() {
 
 export function isWhatsAppConfigured() {
   return Boolean(getAccessToken() && getPhoneNumberId());
+}
+
+function friendlyMetaError(body: any, fallback = "Could not send the WhatsApp message.") {
+  const code = Number(body?.error?.code || 0);
+  const message = String(body?.error?.error_user_msg || body?.error?.message || fallback);
+  const combined = `${message} ${body?.error?.type || ""} ${body?.error?.error_subcode || ""}`.toLowerCase();
+
+  if (code === 190 || /oauth|authentication error|invalid.*access token|session has expired|malformed access token/i.test(combined)) {
+    return "WhatsApp API login failed. On Railway, set WHATSAPP_API_KEY to the Meta Cloud API access token from WhatsApp → API Setup (it starts with EAA), then redeploy.";
+  }
+  if (
+    code === 100 &&
+    /phone number id|does not exist|unsupported (get|post) request|#100/i.test(combined)
+  ) {
+    return "WhatsApp phone number ID is wrong. Set WHATSAPP_PHONE_NUMBER_ID to the numeric ID from Meta API Setup — not the +91 mobile number.";
+  }
+  if (code === 132001 || code === 132005 || code === 132015 || /template/i.test(combined)) {
+    return `WhatsApp OTP template "${getOtpTemplateName()}" is missing, paused, or not approved. Create an Authentication template in Meta Business Manager and set WHATSAPP_OTP_TEMPLATE_NAME.`;
+  }
+  if (code === 131030 || /not in allowed list|recipient.*not.*allowed/i.test(combined)) {
+    return "This number is not allowed while the Meta app is in Development mode. Add it as a test recipient, or switch the app to Live.";
+  }
+  if (code === 133010 || /not registered/i.test(combined)) {
+    return "This WhatsApp business number is not registered on Cloud API yet. Finish Meta WhatsApp registration.";
+  }
+  return message;
 }
 
 function sendJson(res: ServerResponse, status: number, payload: unknown) {
@@ -184,13 +220,16 @@ async function findProfileForUserOrPhone(userId?: string | null, phone?: string 
   return null;
 }
 
-function graphUrl(path: string) {
-  return `https://graph.facebook.com/${getGraphVersion()}/${path}`;
+function graphUrl(path: string, token?: string) {
+  const base = `https://graph.facebook.com/${getGraphVersion()}/${path}`;
+  if (!token) return base;
+  const joiner = base.includes("?") ? "&" : "?";
+  return `${base}${joiner}access_token=${encodeURIComponent(token)}`;
 }
 
 async function graphPost(path: string, payload: Record<string, any>) {
   const token = getAccessToken();
-  const response = await fetch(graphUrl(path), {
+  const response = await fetch(graphUrl(path, token), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -200,14 +239,67 @@ async function graphPost(path: string, payload: Record<string, any>) {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const message =
-      body?.error?.message || body?.error?.error_user_msg || `WhatsApp API failed (${response.status})`;
-    const error = new Error(message) as Error & { status?: number; details?: any };
+    console.error("WhatsApp Graph API error:", JSON.stringify(body?.error || body));
+    const error = new Error(friendlyMetaError(body)) as Error & { status?: number; details?: any };
     error.status = response.status;
     error.details = body;
     throw error;
   }
   return body;
+}
+
+export async function getWhatsAppHealth() {
+  const token = getAccessToken();
+  const phoneNumberId = getPhoneNumberId();
+  const tokenSet = Boolean(token);
+  const tokenLooksValid = /^EAA/i.test(token);
+  if (!tokenSet || !phoneNumberId) {
+    return {
+      configured: false,
+      ok: false,
+      tokenSet,
+      phoneNumberIdSet: Boolean(phoneNumberId),
+      tokenLooksValid,
+      error: "Set WHATSAPP_API_KEY (Meta access token starting with EAA) and WHATSAPP_PHONE_NUMBER_ID.",
+    };
+  }
+
+  try {
+    const response = await fetch(graphUrl(phoneNumberId, token), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        configured: true,
+        ok: false,
+        tokenSet: true,
+        phoneNumberIdSet: true,
+        tokenLooksValid,
+        error: friendlyMetaError(body),
+        metaCode: body?.error?.code,
+      };
+    }
+    return {
+      configured: true,
+      ok: true,
+      tokenSet: true,
+      phoneNumberIdSet: true,
+      tokenLooksValid,
+      displayPhone: body.display_phone_number,
+      verifiedName: body.verified_name,
+      qualityRating: body.quality_rating,
+    };
+  } catch (error: any) {
+    return {
+      configured: true,
+      ok: false,
+      tokenSet: true,
+      phoneNumberIdSet: true,
+      tokenLooksValid,
+      error: error.message || "Could not reach Meta Graph API.",
+    };
+  }
 }
 
 async function sendWhatsAppText(to: string, text: string) {
@@ -406,23 +498,15 @@ async function handleSendOtp(req: IncomingMessage, res: ServerResponse) {
 
   const verifications = await loadTable("whatsapp_verifications");
   const recent = verifications
-    .filter((row) => phonesMatch(row.phone_number, phone) && String(row.user_id || "") === String(user.id))
+    .filter((row) => phonesMatch(row.phone_number, phone) && String(row.user_id || "") === String(user.id) && row.send_ok !== false)
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
-  if (recent?.created_at && Date.now() - new Date(recent.created_at).getTime() < RESEND_COOLDOWN_MS) {
+  if (recent?.created_at && recent?.send_ok !== false && Date.now() - new Date(recent.created_at).getTime() < RESEND_COOLDOWN_MS) {
     sendJson(res, 429, { error: "Please wait a minute before requesting another code." });
     return;
   }
 
   const code = generateCode();
   const now = new Date();
-  await insertRow("whatsapp_verifications", {
-    phone_number: phone,
-    user_id: user.id,
-    code_hash: hashCode(phone, code),
-    attempts: 0,
-    expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
-    verified_at: null,
-  });
 
   try {
     await sendWhatsAppOtpTemplate(phone, code);
@@ -432,6 +516,16 @@ async function handleSendOtp(req: IncomingMessage, res: ServerResponse) {
     });
     return;
   }
+
+  await insertRow("whatsapp_verifications", {
+    phone_number: phone,
+    user_id: user.id,
+    code_hash: hashCode(phone, code),
+    attempts: 0,
+    send_ok: true,
+    expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
+    verified_at: null,
+  });
 
   sendJson(res, 200, {
     ok: true,
