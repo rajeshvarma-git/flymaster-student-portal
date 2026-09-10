@@ -18,6 +18,7 @@ import {
   normalizeIndiaPhoneInput,
   sendWhatsAppOtp,
   verifyWhatsAppOtp,
+  WhatsAppApiError,
 } from '@/lib/whatsappApi';
 
 export type { UniversityRecommendation };
@@ -79,6 +80,7 @@ export const useChat = () => {
   const otpModeRef = useRef(false);
   const pendingPhoneRef = useRef('');
   const verifiedRef = useRef(false);
+  const sendingRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -188,6 +190,21 @@ export const useChat = () => {
     });
   }, [addMessage, fetchUniversities]);
 
+  const enterOtpMode = useCallback((displayPhone: string, digits: string, aiMessage: string) => {
+    pendingPhoneRef.current = digits;
+    phoneModeRef.current = false;
+    otpModeRef.current = true;
+    setState((prev) => ({
+      ...prev,
+      phoneMode: false,
+      otpMode: true,
+      phoneNumber: displayPhone,
+      conversationData: { ...dataRef.current, phone: displayPhone },
+    }));
+    dataRef.current = { ...dataRef.current, phone: displayPhone };
+    addMessage({ type: 'ai', content: aiMessage });
+  }, [addMessage]);
+
   const requestWhatsAppCode = useCallback(async (rawPhone: string) => {
     const digits = normalizeIndiaPhoneInput(rawPhone);
     if (!isValidIndiaMobile(digits)) {
@@ -198,24 +215,27 @@ export const useChat = () => {
       return false;
     }
 
-    const result = await sendWhatsAppOtp(digits);
-    pendingPhoneRef.current = digits;
-    phoneModeRef.current = false;
-    otpModeRef.current = true;
-    setState((prev) => ({
-      ...prev,
-      phoneMode: false,
-      otpMode: true,
-      phoneNumber: result.phone_number,
-      conversationData: { ...dataRef.current, phone: result.phone_number },
-    }));
-    dataRef.current = { ...dataRef.current, phone: result.phone_number };
-    addMessage({
-      type: 'ai',
-      content: `We sent a 6-digit code to your WhatsApp (${result.phone_number}). Enter it here to continue.`,
-    });
-    return true;
-  }, [addMessage]);
+    try {
+      const result = await sendWhatsAppOtp(digits);
+      enterOtpMode(
+        result.phone_number,
+        digits,
+        `We sent a 6-digit code to your WhatsApp (${result.phone_number}). Enter it here to continue.`
+      );
+      return true;
+    } catch (error: any) {
+      const pending = error instanceof WhatsAppApiError && error.codePending;
+      if (pending) {
+        enterOtpMode(
+          error.phoneNumber || `+91 ${digits}`,
+          digits,
+          error.message || 'A code was already sent. Enter the 6-digit WhatsApp code to continue.'
+        );
+        return true;
+      }
+      throw error;
+    }
+  }, [addMessage, enterOtpMode]);
 
   const initializeChat = useCallback(async () => {
     if (!user || profileLoading || initializedRef.current) return;
@@ -318,7 +338,8 @@ export const useChat = () => {
   }, [initializeChat]);
 
   const resendOtp = useCallback(async () => {
-    if (!pendingPhoneRef.current || state.isLoading || state.chatComplete) return;
+    if (!pendingPhoneRef.current || state.isLoading || state.chatComplete || sendingRef.current) return;
+    sendingRef.current = true;
     setState((prev) => ({ ...prev, isLoading: true }));
     try {
       await requestWhatsAppCode(pendingPhoneRef.current);
@@ -328,14 +349,16 @@ export const useChat = () => {
         content: error?.message || 'Could not resend the WhatsApp code. Please try again.',
       });
     } finally {
+      sendingRef.current = false;
       setState((prev) => ({ ...prev, isLoading: false }));
     }
   }, [addMessage, requestWhatsAppCode, state.chatComplete, state.isLoading]);
 
   const sendMessage = useCallback(async (message: string) => {
     const trimmed = message.trim();
-    if (!trimmed || state.isLoading || state.chatComplete) return;
+    if (!trimmed || state.isLoading || state.chatComplete || sendingRef.current) return;
 
+    sendingRef.current = true;
     addMessage({ type: 'user', content: trimmed });
     setState((prev) => ({ ...prev, isLoading: true }));
 
@@ -348,6 +371,7 @@ export const useChat = () => {
           content: error?.message || 'Could not send the WhatsApp code. Please check the number and try again.',
         });
       } finally {
+        sendingRef.current = false;
         setState((prev) => ({ ...prev, isLoading: false }));
       }
       return;
@@ -356,6 +380,7 @@ export const useChat = () => {
     if (otpModeRef.current) {
       if (!/^\d{6}$/.test(trimmed)) {
         addMessage({ type: 'ai', content: 'Please enter the 6-digit code from WhatsApp.' });
+        sendingRef.current = false;
         setState((prev) => ({ ...prev, isLoading: false }));
         return;
       }
@@ -371,6 +396,8 @@ export const useChat = () => {
           content: error?.message || 'That code did not match. Please try again.',
         });
         setState((prev) => ({ ...prev, isLoading: false }));
+      } finally {
+        sendingRef.current = false;
       }
       return;
     }
@@ -378,6 +405,7 @@ export const useChat = () => {
     const steps = activeStepsRef.current;
     const step = steps[stepIndexRef.current];
     if (!step) {
+      sendingRef.current = false;
       setState((prev) => ({ ...prev, isLoading: false }));
       return;
     }
@@ -387,6 +415,7 @@ export const useChat = () => {
 
     if (!validation.valid) {
       addMessage({ type: 'ai', content: validation.error! });
+      sendingRef.current = false;
       setState((prev) => ({ ...prev, isLoading: false }));
       return;
     }
@@ -419,6 +448,7 @@ export const useChat = () => {
 
       dataRef.current = finalData;
       await fetchUniversities(finalData);
+      sendingRef.current = false;
       return;
     }
 
@@ -426,6 +456,7 @@ export const useChat = () => {
       type: 'ai',
       content: step.reply(storedValue),
     });
+    sendingRef.current = false;
     setState((prev) => ({ ...prev, isLoading: false }));
   }, [
     state.isLoading,

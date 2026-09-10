@@ -388,6 +388,12 @@ function publicVerification(userId: string, profile: any, lead: any) {
   };
 }
 
+function verificationWasSent(row: any) {
+  return row?.status === "sent" || Boolean(row?.sent_at);
+}
+
+const otpInFlight = new Map<string, number>();
+
 async function handleSendOtp(req: IncomingMessage, res: ServerResponse) {
   const { user } = await requireSession(req);
   if (!isWhatsAppConfigured()) {
@@ -404,33 +410,64 @@ async function handleSendOtp(req: IncomingMessage, res: ServerResponse) {
     return;
   }
 
+  const lockKey = `${user.id}:${phone}`;
+  const lockStarted = otpInFlight.get(lockKey);
+  if (lockStarted && Date.now() - lockStarted < 15000) {
+    sendJson(res, 429, {
+      error: "We're already sending a code to this number. Please wait a few seconds.",
+      retry_after_seconds: Math.max(1, Math.ceil((15000 - (Date.now() - lockStarted)) / 1000)),
+      code_pending: true,
+      phone_number: formatDisplayPhone(phone),
+    });
+    return;
+  }
+
   const verifications = await loadTable("whatsapp_verifications");
   const recent = verifications
     .filter((row) => phonesMatch(row.phone_number, phone) && String(row.user_id || "") === String(user.id))
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
-  if (recent?.created_at && Date.now() - new Date(recent.created_at).getTime() < RESEND_COOLDOWN_MS) {
-    sendJson(res, 429, { error: "Please wait a minute before requesting another code." });
+  const sentAt = recent ? new Date(recent.sent_at || (verificationWasSent(recent) ? recent.created_at : 0)).getTime() : 0;
+  if (recent && verificationWasSent(recent) && Date.now() - sentAt < RESEND_COOLDOWN_MS) {
+    const waitSec = Math.max(1, Math.ceil((RESEND_COOLDOWN_MS - (Date.now() - sentAt)) / 1000));
+    sendJson(res, 429, {
+      error: `A code was already sent to WhatsApp. Enter it below, or wait ${waitSec} seconds to resend.`,
+      retry_after_seconds: waitSec,
+      code_pending: !recent.verified_at && new Date(recent.expires_at).getTime() > Date.now(),
+      phone_number: formatDisplayPhone(phone),
+    });
     return;
   }
 
+  otpInFlight.set(lockKey, Date.now());
   const code = generateCode();
   const now = new Date();
-  await insertRow("whatsapp_verifications", {
-    phone_number: phone,
-    user_id: user.id,
-    code_hash: hashCode(phone, code),
-    attempts: 0,
-    expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
-    verified_at: null,
-  });
-
+  let verification: any;
   try {
+    verification = await insertRow("whatsapp_verifications", {
+      phone_number: phone,
+      user_id: user.id,
+      code_hash: hashCode(phone, code),
+      attempts: 0,
+      status: "pending",
+      expires_at: new Date(now.getTime() + CODE_TTL_MS).toISOString(),
+      verified_at: null,
+      sent_at: null,
+    });
     await sendWhatsAppOtpTemplate(phone, code);
+    await updateRow("whatsapp_verifications", verification.id, {
+      status: "sent",
+      sent_at: new Date().toISOString(),
+    });
   } catch (error: any) {
+    if (verification?.id) {
+      await updateRow("whatsapp_verifications", verification.id, { status: "failed" }).catch(() => null);
+    }
     sendJson(res, error.status && error.status < 500 ? 400 : 502, {
       error: error.message || "Could not send the WhatsApp OTP template.",
     });
     return;
+  } finally {
+    otpInFlight.delete(lockKey);
   }
 
   sendJson(res, 200, {
@@ -452,7 +489,14 @@ async function handleVerifyOtp(req: IncomingMessage, res: ServerResponse) {
 
   const verifications = await loadTable("whatsapp_verifications");
   const latest = verifications
-    .filter((row) => phonesMatch(row.phone_number, phone) && String(row.user_id || "") === String(user.id) && !row.verified_at)
+    .filter(
+      (row) =>
+        phonesMatch(row.phone_number, phone) &&
+        String(row.user_id || "") === String(user.id) &&
+        !row.verified_at &&
+        row.status !== "failed" &&
+        row.status !== "pending"
+    )
     .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
 
   if (!latest) {

@@ -45,6 +45,22 @@ function getSessionToken() {
   }
 }
 
+export class WhatsAppApiError extends Error {
+  status: number;
+  retryAfterSeconds?: number;
+  codePending?: boolean;
+  phoneNumber?: string;
+
+  constructor(payload: Record<string, any>, status: number) {
+    super(payload.error || `Request failed (${status})`);
+    this.name = 'WhatsAppApiError';
+    this.status = status;
+    this.retryAfterSeconds = payload.retry_after_seconds;
+    this.codePending = Boolean(payload.code_pending);
+    this.phoneNumber = payload.phone_number;
+  }
+}
+
 async function whatsappFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getSessionToken();
   const response = await fetch(apiUrl(path), {
@@ -58,7 +74,7 @@ async function whatsappFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || `Request failed (${response.status})`);
+    throw new WhatsAppApiError(payload, response.status);
   }
   return payload as T;
 }

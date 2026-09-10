@@ -10,6 +10,7 @@ import {
   normalizeIndiaPhoneInput,
   sendWhatsAppOtp,
   verifyWhatsAppOtp,
+  WhatsAppApiError,
 } from '@/lib/whatsappApi';
 
 type GateStep = 'loading' | 'phone' | 'otp' | 'verified';
@@ -60,6 +61,12 @@ export function WhatsAppVerificationGate({ children }: { children: React.ReactNo
       setDisplayPhone(result.phone_number);
       setStep('otp');
     } catch (error: any) {
+      if (error instanceof WhatsAppApiError && error.codePending) {
+        setDisplayPhone(error.phoneNumber || `+91 ${phone}`);
+        setStep('otp');
+        setStatus(error.message);
+        return;
+      }
       setStatus(error.message || 'Could not send the WhatsApp code.');
     } finally {
       setSending(false);
