@@ -12,6 +12,7 @@ const ChatInterface: React.FC = () => {
     messages,
     isLoading,
     otpMode,
+    phoneMode,
     phoneNumber,
     universities,
     showResults,
@@ -19,6 +20,7 @@ const ChatInterface: React.FC = () => {
     chatComplete,
     messagesEndRef,
     sendMessage,
+    resendOtp,
   } = useChat();
 
   return (
@@ -63,8 +65,10 @@ const ChatInterface: React.FC = () => {
             onSendMessage={sendMessage}
             isLoading={isLoading}
             otpMode={otpMode}
+            phoneMode={phoneMode}
             phoneNumber={phoneNumber}
             disabled={chatComplete}
+            onResendOtp={resendOtp}
           />
         </CardContent>
       </Card>
