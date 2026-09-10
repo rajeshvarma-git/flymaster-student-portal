@@ -21,13 +21,16 @@ function normalizeSecret(value: string) {
 }
 
 function getAccessToken() {
-  return normalizeSecret(
-    process.env.WHATSAPP_API_KEY ||
-      process.env.WHATSAPP_ACCESS_TOKEN ||
-      process.env.META_WHATSAPP_TOKEN ||
-      process.env.CLOUD_API_ACCESS_TOKEN ||
-      ""
-  );
+  const candidates = [
+    process.env.WHATSAPP_ACCESS_TOKEN,
+    process.env.WHATSAPP_API_KEY,
+    process.env.META_WHATSAPP_TOKEN,
+    process.env.CLOUD_API_ACCESS_TOKEN,
+  ]
+    .map((value) => normalizeSecret(String(value || "")))
+    .filter(Boolean);
+
+  return candidates.find((token) => /^EAA/i.test(token) && token.length > 80) || candidates[0] || "";
 }
 
 function getPhoneNumberId() {
