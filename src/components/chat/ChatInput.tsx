@@ -2,26 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Send } from 'lucide-react';
-import { isValidIndiaMobile, normalizeIndiaPhoneInput } from '@/lib/whatsappApi';
 
 interface ChatInputProps {
   onSendMessage: (message: string) => Promise<void>;
   isLoading: boolean;
   otpMode: boolean;
-  phoneMode?: boolean;
   phoneNumber: string;
   disabled?: boolean;
-  onResendOtp?: () => Promise<void>;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage,
   isLoading,
   otpMode,
-  phoneMode = false,
   phoneNumber,
   disabled = false,
-  onResendOtp,
 }) => {
   const [currentInput, setCurrentInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -30,7 +25,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     if (!isLoading && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isLoading, otpMode, phoneMode]);
+  }, [isLoading]);
 
   const handleSend = async () => {
     if (!currentInput.trim() || isLoading || disabled) return;
@@ -46,39 +41,29 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const validateInput = (value: string) => {
+    if (otpMode) {
+      return /^\d*$/.test(value) && value.length <= 6;
+    }
+    return true;
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    if (otpMode) {
-      if (/^\d*$/.test(value) && value.length <= 6) setCurrentInput(value);
-      return;
+    if (validateInput(value)) {
+      setCurrentInput(value);
     }
-    if (phoneMode) {
-      setCurrentInput(normalizeIndiaPhoneInput(value));
-      return;
-    }
-    setCurrentInput(value);
   };
 
   const placeholder = otpMode
     ? 'Enter 6-digit verification code...'
-    : phoneMode
-      ? '10-digit WhatsApp number'
-      : 'Type your message...';
+    : 'Type your message...';
 
-  const isValid = otpMode
-    ? /^\d{6}$/.test(currentInput)
-    : phoneMode
-      ? isValidIndiaMobile(currentInput)
-      : currentInput.trim().length > 0;
+  const isValid = otpMode ? /^\d{6}$/.test(currentInput) : currentInput.trim().length > 0;
 
   return (
     <div className="border-t bg-background p-4">
       <div className="flex space-x-2 max-w-4xl mx-auto">
-        {phoneMode && (
-          <div className="flex items-center rounded-md border px-3 text-sm text-muted-foreground bg-muted/40">
-            +91
-          </div>
-        )}
         <Input
           ref={inputRef}
           value={currentInput}
@@ -87,10 +72,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
           placeholder={placeholder}
           disabled={isLoading || disabled}
           className="flex-1 focus-visible:ring-2 focus-visible:ring-primary"
-          type={otpMode || phoneMode ? 'tel' : 'text'}
-          inputMode={otpMode || phoneMode ? 'numeric' : undefined}
-          maxLength={otpMode ? 6 : phoneMode ? 10 : undefined}
-          pattern={otpMode ? '\\d{6}' : phoneMode ? '[6-9]\\d{9}' : undefined}
+          type={otpMode ? 'tel' : 'text'}
+          maxLength={otpMode ? 6 : undefined}
+          pattern={otpMode ? '\\d{6}' : undefined}
           aria-label={placeholder}
           autoComplete="off"
         />
@@ -104,33 +88,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
         </Button>
       </div>
 
-      {phoneMode && (
+      {otpMode && (
         <p className="text-xs text-muted-foreground mt-2 text-center max-w-4xl mx-auto">
-          We’ll send a 6-digit verification code to this WhatsApp number.
+          Enter the 6-digit code sent to <span className="font-medium">{phoneNumber}</span>
         </p>
       )}
 
-      {otpMode && (
-        <div className="mt-2 text-center max-w-4xl mx-auto space-y-1">
-          <p className="text-xs text-muted-foreground">
-            Enter the 6-digit code sent to <span className="font-medium">{phoneNumber}</span>
-          </p>
-          {onResendOtp && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-auto px-2 py-1 text-xs"
-              disabled={isLoading || disabled}
-              onClick={() => void onResendOtp()}
-            >
-              Resend WhatsApp code
-            </Button>
-          )}
-        </div>
-      )}
-
-      {!isLoading && !disabled && !otpMode && !phoneMode && (
+      {!isLoading && !disabled && !otpMode && (
         <p className="text-xs text-muted-foreground/60 mt-1 text-center">
           Press Enter to send • Shift + Enter for new line
         </p>

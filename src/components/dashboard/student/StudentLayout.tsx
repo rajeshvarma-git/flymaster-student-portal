@@ -13,7 +13,6 @@ import { StudentDocuments } from './StudentDocuments';
 import { StudentApplications } from './StudentApplications';
 import { StudentPrivateChat } from './StudentPrivateChat';
 import { StudentTelecallerChat } from './StudentTelecallerChat';
-import { WhatsAppVerificationGate } from '@/components/whatsapp/WhatsAppVerificationGate';
 import { StudentNotifications } from './StudentNotifications';
 import { MobilePortalHeader } from '@/components/mobile/MobilePortalHeader';
 import { getStudentHeaderTitle } from '@/components/mobile/StudentMobileNav';
@@ -116,16 +115,12 @@ export function StudentLayout() {
           } />
           <Route path="chat" element={
             <div className="mobile-page-content">
-              <WhatsAppVerificationGate>
-                <StudentPrivateChat />
-              </WhatsAppVerificationGate>
+              <StudentPrivateChat />
             </div>
           } />
           <Route path="telecaller-chat" element={
             <div className="mobile-page-content">
-              <WhatsAppVerificationGate>
-                <StudentTelecallerChat />
-              </WhatsAppVerificationGate>
+              <StudentTelecallerChat />
             </div>
           } />
           <Route path="notifications" element={

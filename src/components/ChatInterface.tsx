@@ -11,16 +11,12 @@ const ChatInterface: React.FC = () => {
   const {
     messages,
     isLoading,
-    otpMode,
-    phoneMode,
-    phoneNumber,
     universities,
     showResults,
     showExpertHelp,
     chatComplete,
     messagesEndRef,
     sendMessage,
-    resendOtp,
   } = useChat();
 
   return (
@@ -64,11 +60,9 @@ const ChatInterface: React.FC = () => {
           <ChatInput 
             onSendMessage={sendMessage}
             isLoading={isLoading}
-            otpMode={otpMode}
-            phoneMode={phoneMode}
-            phoneNumber={phoneNumber}
+            otpMode={false}
+            phoneNumber=""
             disabled={chatComplete}
-            onResendOtp={resendOtp}
           />
         </CardContent>
       </Card>

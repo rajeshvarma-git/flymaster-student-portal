@@ -12,14 +12,6 @@ import {
 import { saveChatDataToProfile } from '@/lib/syncChatProfile';
 import { useAuth } from '@/hooks/useAuth';
 import type { UniversityRecommendation } from '@/lib/universityRecommendations';
-import {
-  getWhatsAppVerificationStatus,
-  isValidIndiaMobile,
-  normalizeIndiaPhoneInput,
-  sendWhatsAppOtp,
-  verifyWhatsAppOtp,
-  WhatsAppApiError,
-} from '@/lib/whatsappApi';
 
 export type { UniversityRecommendation };
 
@@ -35,9 +27,6 @@ interface ChatState {
   conversationData: Record<string, any>;
   sessionId: string;
   isLoading: boolean;
-  otpMode: boolean;
-  phoneMode: boolean;
-  phoneNumber: string;
   universities: UniversityRecommendation[];
   showResults: boolean;
   showExpertHelp: boolean;
@@ -49,21 +38,11 @@ const INITIAL_STATE: ChatState = {
   conversationData: {},
   sessionId: '',
   isLoading: false,
-  otpMode: false,
-  phoneMode: false,
-  phoneNumber: '',
   universities: [],
   showResults: false,
   showExpertHelp: false,
   chatComplete: false,
 };
-
-function firstNameFromProfile(
-  profile: { first_name?: string | null; full_name?: string | null } | null | undefined,
-  context: { fullName?: string }
-) {
-  return profile?.first_name?.trim() || context.fullName?.split(/\s+/)[0] || '';
-}
 
 let cachedSessionId: string | null = null;
 
@@ -76,10 +55,6 @@ export const useChat = () => {
   const dataRef = useRef<Record<string, any>>({});
   const activeStepsRef = useRef<ChatStep[]>([]);
   const initializedRef = useRef(false);
-  const phoneModeRef = useRef(false);
-  const otpModeRef = useRef(false);
-  const pendingPhoneRef = useRef('');
-  const verifiedRef = useRef(false);
   const sendingRef = useRef(false);
 
   useEffect(() => {
@@ -171,72 +146,6 @@ export const useChat = () => {
     }
   }, [addMessage, persistSession]);
 
-  const continueAfterVerification = useCallback(async () => {
-    phoneModeRef.current = false;
-    otpModeRef.current = false;
-    verifiedRef.current = true;
-    setState((prev) => ({ ...prev, phoneMode: false, otpMode: false, isLoading: false }));
-
-    const steps = activeStepsRef.current;
-    if (steps.length === 0) {
-      setState((prev) => ({ ...prev, isLoading: true }));
-      await fetchUniversities(dataRef.current);
-      return;
-    }
-
-    addMessage({
-      type: 'ai',
-      content: `✅ WhatsApp verified. ${steps[0].question}`,
-    });
-  }, [addMessage, fetchUniversities]);
-
-  const enterOtpMode = useCallback((displayPhone: string, digits: string, aiMessage: string) => {
-    pendingPhoneRef.current = digits;
-    phoneModeRef.current = false;
-    otpModeRef.current = true;
-    setState((prev) => ({
-      ...prev,
-      phoneMode: false,
-      otpMode: true,
-      phoneNumber: displayPhone,
-      conversationData: { ...dataRef.current, phone: displayPhone },
-    }));
-    dataRef.current = { ...dataRef.current, phone: displayPhone };
-    addMessage({ type: 'ai', content: aiMessage });
-  }, [addMessage]);
-
-  const requestWhatsAppCode = useCallback(async (rawPhone: string) => {
-    const digits = normalizeIndiaPhoneInput(rawPhone);
-    if (!isValidIndiaMobile(digits)) {
-      addMessage({
-        type: 'ai',
-        content: 'Please enter a valid 10-digit Indian WhatsApp number (starting with 6, 7, 8, or 9).',
-      });
-      return false;
-    }
-
-    try {
-      const result = await sendWhatsAppOtp(digits);
-      enterOtpMode(
-        result.phone_number,
-        digits,
-        `We sent a 6-digit code to your WhatsApp (${result.phone_number}). Enter it here to continue.`
-      );
-      return true;
-    } catch (error: any) {
-      const pending = error instanceof WhatsAppApiError && error.codePending;
-      if (pending) {
-        enterOtpMode(
-          error.phoneNumber || `+91 ${digits}`,
-          digits,
-          error.message || 'A code was already sent. Enter the 6-digit WhatsApp code to continue.'
-        );
-        return true;
-      }
-      throw error;
-    }
-  }, [addMessage, enterOtpMode]);
-
   const initializeChat = useCallback(async () => {
     if (!user || profileLoading || initializedRef.current) return;
 
@@ -249,36 +158,17 @@ export const useChat = () => {
     const sessionUuid = cachedSessionId;
     sessionIdRef.current = sessionUuid;
     stepIndexRef.current = 0;
-    phoneModeRef.current = false;
-    otpModeRef.current = false;
-    verifiedRef.current = false;
-    pendingPhoneRef.current = '';
 
     const context = buildChatContext(user, userProfile);
     dataRef.current = context;
     activeStepsRef.current = getActiveSteps(context);
-
-    let alreadyVerified = false;
-    let verifiedPhone = context.phone || '';
-    try {
-      const status = await getWhatsAppVerificationStatus();
-      alreadyVerified = Boolean(status.verified);
-      if (status.phone_number) {
-        verifiedPhone = status.phone_number;
-        dataRef.current = { ...dataRef.current, phone: status.phone_number };
-      }
-    } catch (error) {
-      console.warn('WhatsApp verification status skipped:', error);
-    }
-
-    verifiedRef.current = alreadyVerified;
 
     try {
       const textSessionId = `chat_${sessionUuid.slice(0, 8)}`;
       await supabase.from('chat_sessions').insert({
         id: sessionUuid,
         session_id: textSessionId,
-        current_stage: alreadyVerified ? 1 : 0,
+        current_stage: 1,
         conversation_data: dataRef.current,
         user_id: user.id,
       });
@@ -286,38 +176,11 @@ export const useChat = () => {
       console.warn('Chat session insert skipped:', error);
     }
 
-    const firstName = firstNameFromProfile(userProfile, context);
-    const greeting = firstName
-      ? `Hi ${firstName}! 👋 I'm your AI study abroad advisor from Fly Masters.`
-      : `Hi there! 👋 I'm your AI study abroad advisor from Fly Masters.`;
-
-    if (!alreadyVerified) {
-      phoneModeRef.current = true;
-      setState((prev) => ({
-        ...prev,
-        sessionId: sessionUuid,
-        conversationData: dataRef.current,
-        phoneMode: true,
-        otpMode: false,
-        phoneNumber: verifiedPhone,
-        messages: [{
-          id: 'welcome',
-          type: 'ai',
-          content: `${greeting}\n\nFirst, share your WhatsApp number. We'll send a 6-digit verification code to that number, then I'll help you find universities.\n\nWhat is your 10-digit WhatsApp number?`,
-          timestamp: new Date(),
-        }],
-      }));
-      return;
-    }
-
     const welcomeMessage = buildWelcomeMessage(dataRef.current, activeStepsRef.current, userProfile);
     setState((prev) => ({
       ...prev,
       sessionId: sessionUuid,
       conversationData: dataRef.current,
-      phoneMode: false,
-      otpMode: false,
-      phoneNumber: verifiedPhone,
       messages: [{
         id: 'welcome',
         type: 'ai',
@@ -337,23 +200,6 @@ export const useChat = () => {
     void initializeChat();
   }, [initializeChat]);
 
-  const resendOtp = useCallback(async () => {
-    if (!pendingPhoneRef.current || state.isLoading || state.chatComplete || sendingRef.current) return;
-    sendingRef.current = true;
-    setState((prev) => ({ ...prev, isLoading: true }));
-    try {
-      await requestWhatsAppCode(pendingPhoneRef.current);
-    } catch (error: any) {
-      addMessage({
-        type: 'ai',
-        content: error?.message || 'Could not resend the WhatsApp code. Please try again.',
-      });
-    } finally {
-      sendingRef.current = false;
-      setState((prev) => ({ ...prev, isLoading: false }));
-    }
-  }, [addMessage, requestWhatsAppCode, state.chatComplete, state.isLoading]);
-
   const sendMessage = useCallback(async (message: string) => {
     const trimmed = message.trim();
     if (!trimmed || state.isLoading || state.chatComplete || sendingRef.current) return;
@@ -361,46 +207,6 @@ export const useChat = () => {
     sendingRef.current = true;
     addMessage({ type: 'user', content: trimmed });
     setState((prev) => ({ ...prev, isLoading: true }));
-
-    if (phoneModeRef.current) {
-      try {
-        await requestWhatsAppCode(trimmed);
-      } catch (error: any) {
-        addMessage({
-          type: 'ai',
-          content: error?.message || 'Could not send the WhatsApp code. Please check the number and try again.',
-        });
-      } finally {
-        sendingRef.current = false;
-        setState((prev) => ({ ...prev, isLoading: false }));
-      }
-      return;
-    }
-
-    if (otpModeRef.current) {
-      if (!/^\d{6}$/.test(trimmed)) {
-        addMessage({ type: 'ai', content: 'Please enter the 6-digit code from WhatsApp.' });
-        sendingRef.current = false;
-        setState((prev) => ({ ...prev, isLoading: false }));
-        return;
-      }
-      try {
-        const result = await verifyWhatsAppOtp(pendingPhoneRef.current, trimmed);
-        dataRef.current = { ...dataRef.current, phone: result.phone_number };
-        setState((prev) => ({ ...prev, phoneNumber: result.phone_number, conversationData: dataRef.current }));
-        await persistSession(dataRef.current, 1);
-        await continueAfterVerification();
-      } catch (error: any) {
-        addMessage({
-          type: 'ai',
-          content: error?.message || 'That code did not match. Please try again.',
-        });
-        setState((prev) => ({ ...prev, isLoading: false }));
-      } finally {
-        sendingRef.current = false;
-      }
-      return;
-    }
 
     const steps = activeStepsRef.current;
     const step = steps[stepIndexRef.current];
@@ -464,8 +270,6 @@ export const useChat = () => {
     addMessage,
     persistSession,
     fetchUniversities,
-    requestWhatsAppCode,
-    continueAfterVerification,
     user,
     userProfile,
   ]);
@@ -475,6 +279,5 @@ export const useChat = () => {
     messagesEndRef,
     initializeChat,
     sendMessage,
-    resendOtp,
   };
 };
