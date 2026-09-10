@@ -22,6 +22,7 @@ interface AuthContextType {
   hasRole: (role: UserRole) => boolean;
   isAdmin: boolean;
   isCounselor: boolean;
+  isTelecaller: boolean;
   isStudent: boolean;
 }
 
@@ -41,6 +42,7 @@ const AuthContext = createContext<AuthContextType>({
   hasRole: () => false,
   isAdmin: false,
   isCounselor: false,
+  isTelecaller: false,
   isStudent: false,
 });
 
@@ -92,7 +94,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
       
       // Role hierarchy: super_admin > admin > counselor > student
-      const roleHierarchy = ['super_admin', 'admin', 'counselor', 'student'];
+      const roleHierarchy = ['super_admin', 'admin', 'counselor', 'telecaller', 'student'];
       let highestRole: UserRole = 'student';
       
       // Get unique roles to handle duplicates
@@ -271,6 +273,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const isAdmin = !roleLoading && (hasRole('admin') || hasRole('super_admin'));
   const isCounselor = !roleLoading && (hasRole('counselor') || isAdmin);
+  const isTelecaller = !roleLoading && hasRole('telecaller');
   const isStudent = !roleLoading && (hasRole('student') || isCounselor);
   
   // Debug logging for role states (only log once when role changes)
@@ -280,6 +283,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         userRole,
         isAdmin,
         isCounselor,
+        isTelecaller,
         isStudent,
         roleLoading
       });
@@ -303,6 +307,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     hasRole,
     isAdmin,
     isCounselor,
+    isTelecaller,
     isStudent,
   };
 

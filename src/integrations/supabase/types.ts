@@ -2622,6 +2622,117 @@ export type Database = {
           },
         ]
       }
+      whatsapp_conversations: {
+        Row: {
+          assigned_staff_id: string | null
+          contact_name: string | null
+          created_at: string
+          id: string
+          last_message_at: string | null
+          lead_id: string | null
+          phone_number: string
+          staff_role: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          assigned_staff_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          lead_id?: string | null
+          phone_number: string
+          staff_role?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          assigned_staff_id?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          lead_id?: string | null
+          phone_number?: string
+          staff_role?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_messages: {
+        Row: {
+          body: string
+          conversation_id: string
+          created_at: string
+          direction: string
+          id: string
+          is_read: boolean | null
+          staff_id: string | null
+          updated_at: string | null
+          wa_message_id: string | null
+        }
+        Insert: {
+          body: string
+          conversation_id: string
+          created_at?: string
+          direction?: string
+          id?: string
+          is_read?: boolean | null
+          staff_id?: string | null
+          updated_at?: string | null
+          wa_message_id?: string | null
+        }
+        Update: {
+          body?: string
+          conversation_id?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          is_read?: boolean | null
+          staff_id?: string | null
+          updated_at?: string | null
+          wa_message_id?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_verifications: {
+        Row: {
+          attempts: number | null
+          code_hash: string
+          created_at: string
+          expires_at: string
+          id: string
+          phone_number: string
+          updated_at: string | null
+          user_id: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          code_hash: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          phone_number: string
+          updated_at?: string | null
+          user_id?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          code_hash?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          phone_number?: string
+          updated_at?: string | null
+          user_id?: string | null
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       outreach_activity_logs: {
         Row: {
           activity_type: string
@@ -3308,6 +3419,9 @@ export type Database = {
           twelfth_grade_score: string | null
           updated_at: string
           user_id: string
+          whatsapp_number: string | null
+          whatsapp_verified: boolean | null
+          whatsapp_verified_at: string | null
         }
         Insert: {
           backlogs_history?: string | null
@@ -3335,6 +3449,9 @@ export type Database = {
           twelfth_grade_score?: string | null
           updated_at?: string
           user_id: string
+          whatsapp_number?: string | null
+          whatsapp_verified?: boolean | null
+          whatsapp_verified_at?: string | null
         }
         Update: {
           backlogs_history?: string | null
@@ -3362,6 +3479,9 @@ export type Database = {
           twelfth_grade_score?: string | null
           updated_at?: string
           user_id?: string
+          whatsapp_number?: string | null
+          whatsapp_verified?: boolean | null
+          whatsapp_verified_at?: string | null
         }
         Relationships: []
       }
@@ -3783,6 +3903,7 @@ export type Database = {
           academic_score: string | null
           address: string | null
           assigned_counselor_id: string | null
+          assigned_telecaller_id: string | null
           budget_max_usd: number | null
           budget_min_usd: number | null
           chat_session_id: string | null
@@ -3821,11 +3942,15 @@ export type Database = {
           toefl_score: number | null
           updated_at: string
           user_id: string
+          whatsapp_number: string | null
+          whatsapp_verified: boolean | null
+          whatsapp_verified_at: string | null
         }
         Insert: {
           academic_score?: string | null
           address?: string | null
           assigned_counselor_id?: string | null
+          assigned_telecaller_id?: string | null
           budget_max_usd?: number | null
           budget_min_usd?: number | null
           chat_session_id?: string | null
@@ -3864,11 +3989,15 @@ export type Database = {
           toefl_score?: number | null
           updated_at?: string
           user_id: string
+          whatsapp_number?: string | null
+          whatsapp_verified?: boolean | null
+          whatsapp_verified_at?: string | null
         }
         Update: {
           academic_score?: string | null
           address?: string | null
           assigned_counselor_id?: string | null
+          assigned_telecaller_id?: string | null
           budget_max_usd?: number | null
           budget_min_usd?: number | null
           chat_session_id?: string | null
@@ -3907,6 +4036,9 @@ export type Database = {
           toefl_score?: number | null
           updated_at?: string
           user_id?: string
+          whatsapp_number?: string | null
+          whatsapp_verified?: boolean | null
+          whatsapp_verified_at?: string | null
         }
         Relationships: [
           {
@@ -5422,7 +5554,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "student" | "admin" | "counselor" | "super_admin"
+      app_role: "student" | "admin" | "counselor" | "telecaller" | "super_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5550,7 +5682,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["student", "admin", "counselor", "super_admin"],
+      app_role: ["student", "admin", "counselor", "telecaller", "super_admin"],
     },
   },
 } as const

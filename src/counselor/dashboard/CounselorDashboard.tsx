@@ -328,6 +328,7 @@ export function CounselorDashboard() {
               { title: 'My Students', href: '/counselor/students', icon: Users },
               { title: 'Shortlists', href: '/counselor/shortlists', icon: Target },
               { title: 'Student Chat', href: '/counselor/chat', icon: MessageSquare },
+              { title: 'WhatsApp', href: '/counselor/whatsapp', icon: MessageSquare },
               { title: 'Documents', href: '/counselor/documents', icon: FileText },
             ].map((item) => (
               <Link key={item.href} to={item.href}>

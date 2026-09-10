@@ -9,6 +9,7 @@ type UserRole = Database['public']['Enums']['app_role'];
 // Role hierarchy constants
 export const ROLES = {
   STUDENT: 'student' as UserRole,
+  TELECALLER: 'telecaller' as UserRole,
   COUNSELOR: 'counselor' as UserRole, 
   ADMIN: 'admin' as UserRole,
   SUPER_ADMIN: 'super_admin' as UserRole,
@@ -40,6 +41,8 @@ export const getRoleDisplayName = (role: UserRole | null): string => {
   switch (role) {
     case ROLES.STUDENT:
       return 'Student';
+    case ROLES.TELECALLER:
+      return 'Telecaller';
     case ROLES.COUNSELOR:
       return 'Counselor';
     case ROLES.ADMIN:
@@ -54,6 +57,7 @@ export const getRoleDisplayName = (role: UserRole | null): string => {
 // Route paths by role
 export const getDefaultRoute = (role: UserRole | null): string => {
   if (role === ROLES.COUNSELOR) return '/counselor';
+  if (role === ROLES.TELECALLER) return '/dashboard/admin/whatsapp';
   if (role === ROLES.STUDENT) return '/student';
   if (role === ROLES.ADMIN || role === ROLES.SUPER_ADMIN) return '/dashboard';
   if (role) return '/dashboard';

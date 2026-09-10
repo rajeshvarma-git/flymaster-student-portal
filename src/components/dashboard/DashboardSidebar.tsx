@@ -61,9 +61,13 @@ const adminItems: SidebarItem[] = [
   { title: 'Analytics', url: '/dashboard/admin/analytics', icon: BarChart3, adminOnly: true },
 ];
 
+const telecallerItems: SidebarItem[] = [
+  { title: 'WhatsApp', url: '/dashboard/admin/whatsapp', icon: MessageCircle },
+];
+
 export function DashboardSidebar() {
   const { state } = useSidebar();
-  const { user, signOut, isAdmin, roleLoading } = useAuth();
+  const { user, signOut, isAdmin, isTelecaller, roleLoading } = useAuth();
   const location = useLocation();
   const currentPath = location.pathname;
   const collapsed = state === "collapsed";
@@ -83,7 +87,13 @@ export function DashboardSidebar() {
   }, []);
 
   // Determine which items to show - avoid flickering during role loading
-  const sidebarItems = (roleLoading || !isAdmin) ? studentItems : adminItems;
+  const sidebarItems = roleLoading
+    ? studentItems
+    : isAdmin
+      ? adminItems
+      : isTelecaller
+        ? telecallerItems
+        : studentItems;
 
   const isActive = (path: string) => {
     if (path === '/dashboard') {
@@ -112,7 +122,7 @@ export function DashboardSidebar() {
       <GlobalSearch 
         open={searchOpen} 
         onOpenChange={setSearchOpen}
-        userRole={isAdmin ? 'admin' : 'student'}
+        userRole={isAdmin ? 'admin' : isTelecaller ? 'telecaller' : 'student'}
         userId={user?.id}
       />
       
@@ -149,7 +159,7 @@ export function DashboardSidebar() {
 
           <SidebarGroup>
             <SidebarGroupLabel className={collapsed ? "sr-only" : ""}>
-              {isAdmin ? 'Admin Navigation' : 'Navigation'}
+              {isAdmin ? 'Admin Navigation' : isTelecaller ? 'Telecaller Navigation' : 'Navigation'}
             </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

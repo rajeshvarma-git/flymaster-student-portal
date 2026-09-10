@@ -23,6 +23,8 @@ const primaryTabs: MobileNavItem[] = [
   { icon: MessageCircle, label: 'Chat', path: '/counselor/chat' },
 ];
 
+const moreWorkPaths = ['/counselor/whatsapp'];
+
 const morePaths = [
   '/counselor/shortlists',
   '/counselor/documents',
@@ -36,7 +38,7 @@ const morePaths = [
 export function CounselorMobileNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
-  const isMoreActive = morePaths.some((p) => location.pathname.startsWith(p));
+  const isMoreActive = [...morePaths, ...moreWorkPaths].some((p) => location.pathname.startsWith(p));
 
   const close = () => setMoreOpen(false);
 
@@ -52,6 +54,7 @@ export function CounselorMobileNav() {
 
       <MobileMoreMenu open={moreOpen} onOpenChange={setMoreOpen} title="Counselor options">
         <MobileMoreSection>
+          <MobileMoreLink icon={MessageCircle} label="WhatsApp" to="/counselor/whatsapp" onClick={close} />
           <MobileMoreLink icon={Target} label="Shortlists" to="/counselor/shortlists" onClick={close} />
           <MobileMoreLink icon={FileText} label="Documents" to="/counselor/documents" onClick={close} />
           <MobileMoreLink icon={Bell} label="Notifications" to="/counselor/notifications" onClick={close} />
@@ -78,6 +81,7 @@ export function getCounselorHeaderTitle(pathname: string): {
   if (pathname.includes('/leads')) return { title: 'My Leads', showBack: true, backTo: '/counselor' };
   if (pathname.includes('/students')) return { title: 'My Students', showBack: true, backTo: '/counselor' };
   if (pathname.includes('/shortlists')) return { title: 'Shortlists', showBack: true, backTo: '/counselor' };
+  if (pathname.includes('/whatsapp')) return { title: 'WhatsApp', showBack: true, backTo: '/counselor' };
   if (pathname.includes('/chat')) return { title: 'Student Chat', showBack: true, backTo: '/counselor' };
   if (pathname.includes('/documents')) return { title: 'Documents', showBack: true, backTo: '/counselor' };
   if (pathname.includes('/notifications')) return { title: 'Notifications', showBack: true, backTo: '/counselor' };

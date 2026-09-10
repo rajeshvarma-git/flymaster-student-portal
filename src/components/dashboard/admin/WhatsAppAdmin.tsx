@@ -35,6 +35,10 @@ export const WhatsAppAdmin = () => {
     <Card>
       <CardHeader><CardTitle>WhatsApp Configuration</CardTitle></CardHeader>
       <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          This number powers marketing <span className="font-medium">wa.me</span> buttons. The support inbox uses Meta Cloud API env vars
+          (<code>WHATSAPP_API_KEY</code>, <code>WHATSAPP_PHONE_NUMBER_ID</code>) and lives at Admin → WhatsApp.
+        </p>
         <Input value={config.phone_number} onChange={(e) => setConfig({...config, phone_number: e.target.value})} placeholder="Phone Number (e.g., +919502127788)" />
         <Textarea value={config.message} onChange={(e) => setConfig({...config, message: e.target.value})} placeholder="Default message" rows={3} />
         <div className="flex items-center gap-2">

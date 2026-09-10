@@ -1,8 +1,9 @@
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, Users, FileText, BarChart3, Bug, Mail, Zap, Target, Globe, AlertCircle, BookOpen, Plane, Tag, Newspaper } from 'lucide-react';
+import { Shield, Users, FileText, BarChart3, Bug, Mail, Zap, Target, Globe, AlertCircle, BookOpen, Plane, Tag, Newspaper, MessageCircle } from 'lucide-react';
+import { WhatsAppInbox } from '@/components/whatsapp/WhatsAppInbox';
 import { BulkLeadAssignment } from '../admin/BulkLeadAssignment';
 import { StudentLeadsAdmin } from '../admin/StudentLeadsAdmin';
 import { UserManagement } from '../admin/UserManagement';
@@ -37,7 +38,7 @@ import TravelDocumentManagementAdmin from '../admin/TravelDocumentManagementAdmi
 import ThomasCookPackagesAdmin from '../admin/ThomasCookPackagesAdmin';
 
 export function AdminSection() {
-  const { isAdmin, loading, roleLoading, user, userRole } = useAuth();
+  const { isAdmin, isTelecaller, loading, roleLoading, user, userRole } = useAuth();
   const location = useLocation();
 
   // Prevent navigation on window focus/blur
@@ -74,7 +75,7 @@ export function AdminSection() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isTelecaller) {
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-4">
@@ -102,6 +103,26 @@ export function AdminSection() {
             </p>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  if (isTelecaller && !isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-emerald-500/15 text-emerald-600 flex items-center justify-center">
+            <MessageCircle className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold">Telecaller inbox</h1>
+            <p className="text-muted-foreground">WhatsApp threads for your assigned leads</p>
+          </div>
+        </div>
+        <Routes>
+          <Route path="whatsapp" element={<WhatsAppInbox title="WhatsApp" subtitle="Threads for leads assigned to you" />} />
+          <Route path="*" element={<Navigate to="/dashboard/admin/whatsapp" replace />} />
+        </Routes>
       </div>
     );
   }
@@ -134,6 +155,7 @@ export function AdminSection() {
       title: 'Communication',
       items: [
         { title: 'Chat Monitoring', path: '/dashboard/admin/chat', icon: Mail },
+        { title: 'WhatsApp', path: '/dashboard/admin/whatsapp', icon: MessageCircle },
         { title: 'Marketing Automation', path: '/dashboard/admin/marketing', icon: Zap },
         { title: 'University Outreach', path: '/dashboard/admin/outreach', icon: Target },
       ]
@@ -236,6 +258,7 @@ export function AdminSection() {
         <Route path="lead-lifecycle" element={<LeadLifecycleAdmin />} />
         <Route path="leads" element={<StudentLeadsAdmin />} />
         <Route path="chat/*" element={<ChatMonitoringAdmin />} />
+        <Route path="whatsapp" element={<WhatsAppInbox subtitle="All WhatsApp threads across counselors and telecallers" />} />
         <Route path="documents" element={<RoleBasedDocumentsAdmin />} />
         <Route path="media" element={<MediaManager />} />
         <Route path="marketing/*" element={<MarketingAutomationAdmin />} />

@@ -34,6 +34,7 @@ const workItems: CounselorNavItem[] = [
   { title: 'My Students', url: '/counselor/students', icon: Users },
   { title: 'Shortlists', url: '/counselor/shortlists', icon: Target },
   { title: 'Student Chat', url: '/counselor/chat', icon: MessageCircle },
+  { title: 'WhatsApp', url: '/counselor/whatsapp', icon: MessageCircle },
   { title: 'Documents', url: '/counselor/documents', icon: FileText },
   { title: 'Notifications', url: '/counselor/notifications', icon: Bell },
 ];

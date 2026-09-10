@@ -24,12 +24,13 @@ import {
   signUpUser,
   updatePasswordForToken,
 } from "./studentAuth";
+import { handleWhatsAppRequest, isWhatsAppConfigured, isWhatsAppPath } from "./whatsapp";
 
 const API_PATHS = new Set(["/__local_db", "/__db_health", "/__auth", "/__session", "/__storage"]);
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export function isApiPath(pathname: string) {
-  return API_PATHS.has(pathname);
+  return API_PATHS.has(pathname) || isWhatsAppPath(pathname);
 }
 
 function applyCors(req: IncomingMessage, res: ServerResponse) {
@@ -119,7 +120,14 @@ export async function handleApiRequest(req: IncomingMessage, res: ServerResponse
         smtpOk: smtp.ok,
         smtpError: smtp.ok ? undefined : smtp.error,
         documentChecklists: (state.tables.document_checklists || []).length,
+        whatsappConfigured: isWhatsAppConfigured(),
+        whatsappProvider: process.env.WHATSAPP_PROVIDER || "meta",
       });
+      return;
+    }
+
+    if (isWhatsAppPath(url)) {
+      await handleWhatsAppRequest(req, res);
       return;
     }
 

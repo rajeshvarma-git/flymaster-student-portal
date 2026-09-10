@@ -39,7 +39,7 @@ const Dashboard = () => {
 
   // Route based on ACTUAL role, not hierarchical permissions
   // Check in order: admin -> counselor -> student
-  if (userRole === 'admin' || userRole === 'super_admin') {
+  if (userRole === 'admin' || userRole === 'super_admin' || userRole === 'telecaller') {
     return (
       <SidebarProvider>
         <div className="min-h-screen flex w-full overflow-x-hidden bg-gradient-background">

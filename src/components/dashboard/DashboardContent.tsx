@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
 import { ProfileSection } from './sections/ProfileSection';
@@ -34,6 +34,7 @@ export function DashboardContent() {
     <div className="p-4 md:p-6 w-full overflow-x-hidden">
       <Routes>
         <Route index element={
+          userRole === 'telecaller' ? <Navigate to="/dashboard/admin/whatsapp" replace /> :
           userRole === 'counselor' ? <CounselorDashboard /> : 
           userRole === 'student' ? <StudentDashboard /> : <ProfileSection />
         } />

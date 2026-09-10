@@ -7,6 +7,7 @@ import { MyLeads } from '@/counselor/leads/MyLeads';
 import { MyStudents } from '@/counselor/students/MyStudents';
 import { UniversityShortlisting } from '@/counselor/shortlists/UniversityShortlisting';
 import { CounselorStudentChat } from '@/counselor/chat/CounselorStudentChat';
+import { WhatsAppInbox } from '@/components/whatsapp/WhatsAppInbox';
 import { CounselorProfileForm } from '@/counselor/profile/CounselorProfileForm';
 import { LeaveManagement } from '@/counselor/hr/LeaveManagement';
 import { AttendanceTracking } from '@/counselor/hr/AttendanceTracking';
@@ -57,6 +58,7 @@ export function CounselorLayout() {
           <Route path="students" element={<div className="mobile-page-content"><MyStudents /></div>} />
           <Route path="shortlists" element={<div className="mobile-page-content"><UniversityShortlisting /></div>} />
           <Route path="chat" element={<div className="mobile-page-content"><CounselorStudentChat /></div>} />
+          <Route path="whatsapp" element={<div className="mobile-page-content"><WhatsAppInbox subtitle="WhatsApp threads for your assigned students" /></div>} />
           <Route path="documents" element={<div className="mobile-page-content"><StudentDocumentReview /></div>} />
           <Route path="profile" element={<div className="mobile-page-content"><CounselorProfileForm /></div>} />
           <Route path="leave" element={<div className="mobile-page-content"><LeaveManagement /></div>} />

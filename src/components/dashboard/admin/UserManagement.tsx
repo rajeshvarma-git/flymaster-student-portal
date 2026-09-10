@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
-import { Users, Shield, UserCheck, Search, Filter, RefreshCw, Key } from 'lucide-react';
+import { Users, Shield, UserCheck, Search, Filter, RefreshCw, Key, Phone } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { ROLES, getRoleDisplayName } from '@/lib/auth-utils';
@@ -269,6 +269,8 @@ export function UserManagement() {
         return <Badge className="bg-purple-100 text-purple-800"><Shield className="w-3 h-3 mr-1" />Admin</Badge>;
       case ROLES.COUNSELOR:
         return <Badge className="bg-blue-100 text-blue-800"><UserCheck className="w-3 h-3 mr-1" />Counselor</Badge>;
+      case ROLES.TELECALLER:
+        return <Badge className="bg-emerald-100 text-emerald-800"><Phone className="w-3 h-3 mr-1" />Telecaller</Badge>;
       default:
         return <Badge className="bg-green-100 text-green-800">Student</Badge>;
     }
@@ -498,6 +500,7 @@ export function UserManagement() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ROLES.STUDENT}>Student</SelectItem>
+                    <SelectItem value={ROLES.TELECALLER}>Telecaller</SelectItem>
                     <SelectItem value={ROLES.COUNSELOR}>Counselor</SelectItem>
                     <SelectItem value={ROLES.ADMIN}>Admin</SelectItem>
                     <SelectItem value={ROLES.SUPER_ADMIN}>Super Admin</SelectItem>

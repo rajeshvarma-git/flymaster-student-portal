@@ -61,6 +61,7 @@ export function useGlobalSearch({ userRole, userId }: UseGlobalSearchProps) {
           { id: 'admin-documents', title: 'Document Management', description: 'Review and manage student documents', category: 'Admin', path: '/dashboard/admin/documents', icon: 'FileText' },
           { id: 'admin-analytics', title: 'Analytics', description: 'View system analytics and reports', category: 'Admin', path: '/dashboard/analytics', icon: 'BarChart' },
           { id: 'admin-chat', title: 'Chat Monitoring', description: 'Monitor live chat conversations', category: 'Admin', path: '/dashboard/admin/chat', icon: 'MessageSquare' },
+          { id: 'admin-whatsapp', title: 'WhatsApp Inbox', description: 'Reply to student WhatsApp messages', category: 'Admin', path: '/dashboard/admin/whatsapp', icon: 'MessageSquare' },
           { id: 'admin-marketing', title: 'Marketing Automation', description: 'Manage campaigns and outreach', category: 'Admin', path: '/dashboard/admin/marketing', icon: 'Megaphone' },
           { id: 'admin-settings', title: 'System Settings', description: 'Configure system settings', category: 'Admin', path: '/dashboard/admin/settings', icon: 'Settings' },
         ];
